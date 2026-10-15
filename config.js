@@ -1,6 +1,6 @@
-// Paste your keys here. Leave as is to run coconotes in demo mode with sample items.
+// coconotes: connection settings
 window.MP_CONFIG = {
-  SUPABASE_URL: 'YOUR_SUPABASE_URL',          // Supabase > Project Settings > API > Project URL
-  SUPABASE_ANON_KEY: 'YOUR_SUPABASE_ANON_KEY', // Supabase > Project Settings > API > anon public key
-  VAPID_PUBLIC_KEY: 'YOUR_VAPID_PUBLIC_KEY'    // From tools/make-push-keys.html (the PUBLIC key only)
+  SUPABASE_URL: 'https://nqzdkbqxcljfhmzyntxu.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xemRrYnF4Y2xqZmhtenludHh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIwMjg3MzUsImV4cCI6MjEwNzYwNDczNX0.sW_21ROUoY7X4zcuKSEqBPH9z5ERRoqgzAu14LEMiGM',
+  VAPID_PUBLIC_KEY: 'YOUR_VAPID_PUBLIC_KEY'
 };
