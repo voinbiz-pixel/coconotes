@@ -485,7 +485,7 @@ function renderNote() {
   showSheet(`${top(`${n.created_by === state.me.id ? 'You' : esc(nameOf(n.created_by))}, ${esc(noteWhen(n.updated_at))}`, 'Done')}
     <textarea id="note-body" class="note-body" placeholder="Start typing. The first line becomes the title." aria-label="Note">${esc(n.body)}</textarea>
     <div class="note-tools"><span class="fc-l">Folder</span>${chipRow('nfolder', [['', 'None'], ...state.brands.map(x => [x.id, x.name, x.color])], n.brand_id || '')}</div>
-    <div class="actions"><button class="act" data-note-task="1">${ICON.task}<span>Make it a reminder</span></button><button class="act" data-note-del="1">${ICON.trash}<span>Delete</span></button></div>`, 'Note');
+    <div class="actions"><button class="act" data-note-task="1">${ICON.task}<span>Make reminder</span></button><button class="act" data-note-del="1">${ICON.trash}<span>Delete</span></button></div>`, 'Note');
   $('#sheet-root .sheet')?.classList.add('tall');
 }
 let noteTimer = null;

@@ -770,3 +770,24 @@ html{touch-action:manipulation;-webkit-text-size-adjust:100%}
 .scrim{animation:fade .5s ease}
 .sec-h .gh-act{margin:-8px -2px -8px auto;min-height:32px;padding:0 12px;border-radius:999px;background:var(--tile);color:var(--red);font-size:.765rem;font-weight:500;position:relative}
 .sec-h .gh-act::after{content:"";position:absolute;inset:-6px -2px}
+
+/* =================== Symmetry pass 3 =================== */
+/* rows: equal space above and below the text; a one-line row is exactly 44pt plus padding */
+.group.lst .row{min-height:0}
+.group.lst .row-main{padding:12px 0}
+/* section headings: the gap to the card is a margin, so the heading box itself is balanced */
+.sec-h{padding:0 4px;margin:0 0 10px}
+/* "N completed / Show" bar: text centered in its row */
+.done-bar{padding:0 4px;margin-top:12px}
+/* week strip: dots under the numbers no longer leave a heavier bottom */
+.cal-card{padding:8px 8px 3px}
+/* chip rows inside form rows: no stray space underneath */
+.fc-row .chips,.note-tools .chips{padding:0}
+/* note rows and the Messages card: same space top and bottom */
+.note-row{padding:12px 16px}
+.msg-card{padding:14px}
+/* action buttons keep their label on one line, so icon and text center together */
+.act span{white-space:nowrap}
+.group.lst .row-main{min-height:0}
+.sec-h{align-items:center}
+.cd{padding:6px 0;min-height:0}
