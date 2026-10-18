@@ -35,7 +35,7 @@ h1,h2,h3{margin:0;font-weight:500}
 .dateline{font-size:1rem;margin-top:10px}
 .datesub{font-size:0.882rem;color:var(--graphite);margin-top:2px}
 .tile{background:var(--tile);border-radius:var(--r-tile);padding:16px;min-width:0}
-button.tile{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;width:100%;min-height:104px;transition:transform .15s ease}
+button.tile{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;width:100%;min-height:104px;transition:transform 0.22s ease}
 button.tile:active{transform:scale(.98)}
 .big{font-size:52px;line-height:.9;font-weight:500;letter-spacing:-.03em}
 .lbl{font-size:0.765rem;color:var(--graphite)}
@@ -46,10 +46,10 @@ button.tile:active{transform:scale(.98)}
 /* Rows */
 .row{display:flex;align-items:flex-start;gap:12px;border-top:1px solid var(--steel);min-height:52px}
 .check{width:44px;height:44px;margin:2px -12px 0 -12px;flex:none;display:flex;align-items:center;justify-content:center}
-.check::before{content:"";width:20px;height:20px;border-radius:50%;border:1.5px solid var(--ink);transition:background .2s ease,border-color .2s ease}
+.check::before{content:"";width:20px;height:20px;border-radius:50%;border:1.5px solid var(--ink);transition:background 0.29s ease,border-color 0.29s ease}
 .check.urgent::before{border-color:var(--red)}
 .check.done::before,.check.completing::before{background:var(--ink);border-color:var(--ink)}
-.check::after{content:"";position:absolute;width:6px;height:10px;border:solid var(--ground);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px);opacity:0;transition:opacity .2s ease}
+.check::after{content:"";position:absolute;width:6px;height:10px;border:solid var(--ground);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px);opacity:0;transition:opacity 0.29s ease}
 .check{position:relative}
 .check.done::after,.check.completing::after{opacity:1}
 .row-main{flex:1;min-width:0;padding:12px 0 11px;min-height:52px}
@@ -63,8 +63,8 @@ button.tile:active{transform:scale(.98)}
 .seg{display:flex;background:var(--tile);border-radius:var(--r-ctl);padding:3px;gap:2px;overflow-x:auto}
 .seg button{flex:1;min-height:40px;border-radius:9px;padding:0 12px;font-size:0.824rem;text-align:center;white-space:nowrap;color:var(--graphite)}
 .seg{position:relative}
-.seg-pill{position:absolute;top:3px;bottom:3px;left:0;width:0;border-radius:9px;background:var(--ink);transition:transform .38s cubic-bezier(.3,1.25,.5,1),width .38s cubic-bezier(.3,1.25,.5,1);pointer-events:none}
-.seg button{position:relative;z-index:1;transition:color .2s ease}
+.seg-pill{position:absolute;top:3px;bottom:3px;left:0;width:0;border-radius:9px;background:var(--ink);transition:transform 0.55s cubic-bezier(.3,1.25,.5,1),width 0.55s cubic-bezier(.3,1.25,.5,1);pointer-events:none}
+.seg button{position:relative;z-index:1;transition:color 0.29s ease}
 .seg button[aria-pressed=true]{color:var(--ground)}
 .chips{display:flex;gap:6px;overflow-x:auto;padding:10px 0 4px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
@@ -105,8 +105,8 @@ textarea.input{min-height:88px;resize:vertical}
 .tabs svg{width:22px;height:22px}
 
 /* Sheet */
-.scrim{position:fixed;inset:0;background:var(--scrim);z-index:40;animation:fade .3s ease}
-.sheet{position:fixed;left:0;right:0;bottom:0;max-height:92vh;overflow:auto;background:var(--ground);border-radius:24px 24px 0 0;z-index:41;padding:10px 18px calc(24px + env(safe-area-inset-bottom));animation:sheetup .46s cubic-bezier(.32,.72,0,1)}
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:40;animation:fade 0.43s ease}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:92vh;overflow:auto;background:var(--ground);border-radius:24px 24px 0 0;z-index:41;padding:10px 18px calc(24px + env(safe-area-inset-bottom));animation:sheetup 0.67s cubic-bezier(.32,.72,0,1)}
 .grabber,.sheet-top{touch-action:none}
 .grabber{width:40px;height:5px;border-radius:3px;background:var(--steel);margin:0 auto 8px}
 .sheet-top{display:flex;justify-content:space-between;align-items:center;min-height:44px}
@@ -114,8 +114,8 @@ textarea.input{min-height:88px;resize:vertical}
 .title-input{resize:none;overflow:hidden;width:100%;border:0;background:transparent;font-size:1.647rem;font-weight:500;letter-spacing:-.02em;padding:4px 0;line-height:1.15}
 .title-input:focus{outline:none}
 .two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px}
-.switch{width:51px;height:31px;border-radius:999px;background:var(--steel);position:relative;flex:none;transition:background .2s}
-.switch::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;transition:transform .2s}
+.switch{width:51px;height:31px;border-radius:999px;background:var(--steel);position:relative;flex:none;transition:background 0.29s}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;transition:transform 0.29s}
 .switch[aria-checked=true]{background:var(--red)}
 .switch[aria-checked=true]::after{transform:translateX(20px)}
 .comment{border-top:1px solid var(--steel);padding:10px 0;display:flex;gap:10px;align-items:flex-start}
@@ -124,7 +124,7 @@ textarea.input{min-height:88px;resize:vertical}
 .sheet .tile{margin-top:8px}
 
 /* Toast */
-.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--ground);border-radius:14px;padding:6px 6px 6px 16px;display:flex;align-items:center;gap:12px;font-size:0.824rem;z-index:60;max-width:calc(100% - 32px);animation:up .2s ease}
+.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--ground);border-radius:14px;padding:6px 6px 6px 16px;display:flex;align-items:center;gap:12px;font-size:0.824rem;z-index:60;max-width:calc(100% - 32px);animation:up 0.29s ease}
 .toast button{min-height:40px;padding:0 12px;border-radius:10px;font-weight:500;color:var(--ground)}
 .toast:empty{display:none}
 
@@ -136,7 +136,7 @@ textarea.input{min-height:88px;resize:vertical}
 
 @keyframes up{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
-.toast{animation:toastin .42s cubic-bezier(.3,1.4,.5,1)}
+.toast{animation:toastin 0.61s cubic-bezier(.3,1.18,.5,1)}
 @keyframes toastin{from{opacity:0;transform:translate(-50%,18px) scale(.94)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
 
 @media (min-width:900px){
@@ -152,7 +152,7 @@ textarea.input{min-height:88px;resize:vertical}
   .numeral{font-size:160px}
   .datehead{display:flex;align-items:flex-end;gap:24px;padding:0 4px 24px}
   .datehead .dateline{font-size:1.294rem;margin-top:0}
-  .sheet{left:50%;right:auto;bottom:auto;top:50%;transform:translate(-50%,-50%);width:560px;border-radius:24px;max-height:86vh;animation:dpop .28s cubic-bezier(.2,.9,.3,1.1)}
+  .sheet{left:50%;right:auto;bottom:auto;top:50%;transform:translate(-50%,-50%);width:560px;border-radius:24px;max-height:86vh;animation:dpop 0.41s cubic-bezier(.2,.9,.3,1.1)}
   .grabber{display:none}
   .toast{bottom:32px}
   .page-title{font-size:64px}
@@ -168,32 +168,32 @@ body.sheet-open .toast{bottom:calc(24px + env(safe-area-inset-bottom))}
 @keyframes sheetup{from{transform:translateY(100%)}to{transform:none}}
 @keyframes dpop{from{opacity:0;scale:.95}to{opacity:1;scale:1}}
 /* Completing a task: pop, tick, strike, then the row folds away */
-.tt{background:linear-gradient(currentColor,currentColor) 0 58%/0% 1.5px no-repeat;transition:background-size .38s cubic-bezier(.65,0,.35,1),color .3s ease}
+.tt{background:linear-gradient(currentColor,currentColor) 0 58%/0% 1.5px no-repeat;transition:background-size 0.55s cubic-bezier(.65,0,.35,1),color 0.43s ease}
 .row.is-done .tt,.row.completing .tt{background-size:100% 1.5px;color:var(--graphite)}
 .row.is-done .row-title,.row.completing .row-title{color:var(--graphite)}
-.check.completing::before{animation:pop .42s cubic-bezier(.3,1.6,.5,1)}
-.check.completing::after{animation:tick .3s .08s cubic-bezier(.3,1.6,.5,1) both}
+.check.completing::before{animation:pop 0.61s cubic-bezier(.3,1.22,.5,1)}
+.check.completing::after{animation:tick 0.43s 0.12s cubic-bezier(.3,1.22,.5,1) both}
 @keyframes pop{0%{transform:scale(1)}35%{transform:scale(1.28)}100%{transform:scale(1)}}
 @keyframes tick{from{opacity:0;transform:rotate(45deg) translate(-1px,-1px) scale(.3)}to{opacity:1;transform:rotate(45deg) translate(-1px,-1px) scale(1)}}
 .check:active::before{transform:scale(.88)}
-.check::before{transition:background .2s ease,border-color .2s ease,transform .15s ease}
+.check::before{transition:background 0.29s ease,border-color 0.29s ease,transform 0.22s ease}
 /* New or changed rows slide into place */
-.row.enter{animation:rowin .5s cubic-bezier(.2,.8,.2,1)}
+.row.enter{animation:rowin 0.72s cubic-bezier(.22,1,.36,1)}
 @keyframes rowin{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
 /* Quick add chips pop as they are recognized */
-.chip.pop{animation:chippop .32s cubic-bezier(.3,1.6,.5,1)}
+.chip.pop{animation:chippop 0.46s cubic-bezier(.3,1.22,.5,1)}
 @keyframes chippop{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}
 /* Tab bar press */
-.tabs svg{transition:transform .18s cubic-bezier(.3,1.6,.5,1)}
+.tabs svg{transition:transform 0.26s cubic-bezier(.3,1.22,.5,1)}
 .tabs button:active svg{transform:scale(.84)}
-.tabs button[aria-current=page] svg{animation:tabbump .35s cubic-bezier(.3,1.6,.5,1)}
+.tabs button[aria-current=page] svg{animation:tabbump 0.51s cubic-bezier(.3,1.22,.5,1)}
 @keyframes tabbump{40%{transform:scale(1.15)}}
-.switch::after{transition:transform .32s cubic-bezier(.3,1.4,.5,1)}
+.switch::after{transition:transform 0.46s cubic-bezier(.3,1.18,.5,1)}
 /* One orchestrated moment: the morning open */
 .numwrap{overflow:hidden;padding-top:.08em;margin-top:-.08em}
-.intro .numeral{animation:numrise .9s cubic-bezier(.16,1,.3,1) both}
+.intro .numeral{animation:numrise 1.3s cubic-bezier(.16,1,.3,1) both}
 @keyframes numrise{from{transform:translateY(100%)}to{transform:none}}
-.intro .dateline,.intro .datesub{animation:fadeup .6s .25s cubic-bezier(.2,.8,.2,1) both}
+.intro .dateline,.intro .datesub{animation:fadeup 0.87s 0.36s cubic-bezier(.22,1,.36,1) both}
 .intro .datesub{animation-delay:.32s}
 @keyframes fadeup{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
@@ -219,7 +219,7 @@ body.sheet-open .toast{bottom:calc(24px + env(safe-area-inset-bottom))}
 /* ---------- Today extras ---------- */
 
 /* ---------- Create ---------- */
-.qa-btn{flex:none;width:40px;height:40px;border-radius:12px;background:var(--ink);color:var(--ground);display:flex;align-items:center;justify-content:center;font-size:0.824rem;font-weight:500;transition:width .25s cubic-bezier(.3,1.3,.5,1),transform .12s ease}
+.qa-btn{flex:none;width:40px;height:40px;border-radius:12px;background:var(--ink);color:var(--ground);display:flex;align-items:center;justify-content:center;font-size:0.824rem;font-weight:500;transition:width 0.36s cubic-bezier(.3,1.15,.5,1),transform 0.17s ease}
 .qa-btn.wide{width:58px}
 .qa-btn:active{transform:scale(.92)}
 .qa-btn svg{width:22px;height:22px;stroke-width:2.2}
@@ -228,7 +228,7 @@ body.sheet-open .toast{bottom:calc(24px + env(safe-area-inset-bottom))}
 .datechip input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
 .datechip.on{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .swatches{display:grid;grid-template-columns:repeat(8,minmax(0,44px));gap:6px}
-.sw{width:100%;aspect-ratio:1;border-radius:50%;transition:box-shadow .2s ease}
+.sw{width:100%;aspect-ratio:1;border-radius:50%;transition:box-shadow 0.29s ease}
 .sw[aria-checked=true]{box-shadow:0 0 0 3px var(--ground),0 0 0 5px var(--ink)}
 .btn.wide{width:100%;margin-top:20px;min-height:52px;font-size:0.941rem}
 .row-form{display:flex;gap:8px;margin-top:8px}
@@ -288,14 +288,14 @@ a.btn{text-decoration:none;color:inherit}
 .a-text{font-size:0.882rem;line-height:1.35}
 .a-text b{font-weight:500}
 .a-quote{font-size:0.824rem;color:var(--graphite);border-left:2px solid var(--steel);padding-left:8px}
-.udot{width:9px;height:9px;border-radius:50%;background:transparent;flex:none;margin-top:6px;transition:background .3s ease}
+.udot{width:9px;height:9px;border-radius:50%;background:transparent;flex:none;margin-top:6px;transition:background 0.43s ease}
 .arow.unread .udot{background:var(--red)}
 .calpromo.hot{box-shadow:inset 0 0 0 1.5px var(--ink)}
 
 /* Item sheet */
 .done-row{display:flex;gap:10px;align-items:flex-start}
 .step{display:flex;flex-direction:column;gap:6px;align-items:stretch;min-height:44px;padding-top:4px}
-.step i{display:block;height:6px;border-radius:3px;background:var(--steel);transition:background .3s ease;transform-origin:center}
+.step i{display:block;height:6px;border-radius:3px;background:var(--steel);transition:background 0.43s ease;transform-origin:center}
 .step.past i{background:var(--graphite)}
 .step.cur i{background:var(--ink)}
 .step span{font-size:0.647rem;color:var(--graphite);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -336,13 +336,13 @@ a.btn{text-decoration:none;color:inherit}
 .mark{display:block;flex:none}
 .dock-row{display:flex;gap:8px;align-items:center}
 .dock-row .qa{flex:1;min-width:0}
-.micbtn{flex:none;width:52px;height:52px;border-radius:50%;background:var(--ink);color:var(--ground);display:flex;align-items:center;justify-content:center;transition:transform .15s cubic-bezier(.3,1.6,.5,1)}
+.micbtn{flex:none;width:52px;height:52px;border-radius:50%;background:var(--ink);color:var(--ground);display:flex;align-items:center;justify-content:center;transition:transform 0.22s cubic-bezier(.3,1.22,.5,1)}
 .micbtn svg{width:24px;height:24px;stroke-width:2}
 .micbtn:active{transform:scale(.9)}
 .chip-ic{display:inline-flex}.chip-ic svg{width:15px;height:15px}
 
 /* Today */
-.dial{width:44px;height:44px;border-radius:50%;background:var(--ink);color:var(--ground);display:flex;align-items:center;justify-content:center;flex:none;text-decoration:none;transition:transform .15s cubic-bezier(.3,1.6,.5,1)}
+.dial{width:44px;height:44px;border-radius:50%;background:var(--ink);color:var(--ground);display:flex;align-items:center;justify-content:center;flex:none;text-decoration:none;transition:transform 0.22s cubic-bezier(.3,1.22,.5,1)}
 .dial:active{transform:scale(.9)}
 .dial svg{width:20px;height:20px}
 .dial.off{background:var(--ground);color:var(--graphite)}
@@ -433,7 +433,7 @@ a.act{text-decoration:none}
 .ra svg{width:20px;height:20px}
 .ra-flag{background:#9A5410}
 .ra-del{background:var(--red-fill)}
-.group.lst .row{position:relative;z-index:1;display:flex;align-items:flex-start;gap:6px;padding:0 12px 0 16px;background:var(--tile);border-top:0;min-height:56px;touch-action:pan-y;transition:transform .28s cubic-bezier(.2,.9,.3,1)}
+.group.lst .row{position:relative;z-index:1;display:flex;align-items:flex-start;gap:6px;padding:0 12px 0 16px;background:var(--tile);border-top:0;min-height:56px;touch-action:pan-y;transition:transform 0.41s cubic-bezier(.2,.9,.3,1)}
 .group.lst .row .check{width:44px;height:44px;margin:4px -8px 0 -12px;flex:none}
 .group.lst .row-main{flex:1;min-width:0;padding:12px 0 11px;display:flex;flex-direction:column;gap:2px}
 .row-title{font-size:1rem;line-height:1.3;display:flex;gap:4px;align-items:baseline}
@@ -489,7 +489,7 @@ a.act{text-decoration:none}
 .st-doing{color:var(--ink);font-weight:500}
 .group-h .gh-act{font-size:.765rem;font-weight:500;color:var(--ink);min-height:32px;padding:0 10px;margin:-6px -6px -6px 0;border-radius:999px;background:var(--ground)}
 .group.lst .row{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.group.lst .row.pressing{background:var(--ground);transition:background .3s ease .1s}
+.group.lst .row.pressing{background:var(--ground);transition:background 0.43s ease 0.14s}
 .smart{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--gap);margin-top:8px}
 .smart-tile{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;align-items:center;gap:6px 10px;background:var(--tile);border-radius:16px;padding:12px 14px;min-height:76px;text-align:left}
 .st-ic{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ink);color:var(--ground)}
@@ -673,3 +673,100 @@ a.act{text-decoration:none}
 :root[data-theme="dark"]{--switch-on:#30D158}
 .switch[aria-checked=true]{background:var(--switch-on)}
 .lg-both{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.kb-hint{display:flex;align-items:center;gap:12px;background:var(--tile);border-radius:14px;padding:12px 14px;margin:4px 0 10px;font-size:.882rem;line-height:1.4}
+.kb-hint b{font-weight:500}
+.kb-key{flex:none;width:36px;height:36px;border-radius:8px;background:var(--ground);box-shadow:inset 0 0 0 1px var(--steel),0 1px 0 var(--steel);display:flex;align-items:center;justify-content:center}
+.kb-key svg{width:18px;height:18px}
+
+/* =================== Feels like an app, not a web page =================== */
+/* No text highlighting or link pop-ups when you press and hold buttons, rows, tabs, or labels */
+html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+img,svg{-webkit-user-drag:none;user-drag:none}
+/* Still selectable where you'd want to copy or edit: text fields and message text */
+input,textarea,[contenteditable],.bubble .b-text,.a-quote,.mono-link{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+
+
+/* =================== v8: duo, notes, calmer motion =================== */
+html{touch-action:manipulation;-webkit-text-size-adjust:100%}
+/* iOS 26 draws a soft blur over the status bar area; paint our own solid strip there and start the header below it */
+.statusback{position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--ground);z-index:35;pointer-events:none}
+@media (max-width:899px){ .shell{padding-top:calc(env(safe-area-inset-top,0px) + 18px)} }
+.ph-top{min-height:44px}
+/* quick add: one pill, with the button sitting evenly inside it */
+.dock-row{gap:0}
+.qa{border-radius:26px;min-height:52px;padding:0 5px 0 18px;border-width:1.5px;gap:8px}
+.qa input{font-size:1rem}
+.qa-btn{width:40px;height:40px;min-width:40px;border-radius:20px;flex:none}
+.qa-btn.wide{width:auto;padding:0 16px;border-radius:20px}
+.qa-btn svg{width:20px;height:20px}
+/* calls without a number still read as calls */
+.group.lst .row-meta .calltag{color:var(--ink);font-weight:500}
+.calltag svg{width:13px;height:13px}
+/* upcoming: weekday plus date */
+.sec-h .sec-date{font-size:.882rem;font-weight:400;color:var(--graphite)}
+.sec{margin-top:22px}
+.sec-h{gap:10px;padding-bottom:10px}
+/* messages, up top in details */
+.msg-card{background:var(--tile);border-radius:18px;padding:12px 14px 14px;margin-top:14px}
+.msg-h{display:flex;justify-content:space-between;align-items:center;font-size:.941rem;font-weight:500;margin-bottom:8px}
+.msg-h > span:first-child{display:inline-flex;align-items:center;gap:8px}
+.msg-h svg{width:18px;height:18px}
+.msg-card .thread{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto;margin:0 0 10px}
+.msg-empty{margin:2px 0 6px}
+.composer{display:flex;align-items:center;gap:8px;background:var(--ground);border-radius:22px;padding:4px 4px 4px 14px}
+.composer .input{flex:1;min-width:0;border:0;background:transparent;padding:10px 0;min-height:36px;font-size:1rem}
+.send-btn{flex:none;width:36px;height:36px;border-radius:50%;background:var(--ink);color:var(--ground);display:flex;align-items:center;justify-content:center}
+.send-btn svg{width:17px;height:17px}
+.send-btn::after{content:"";position:absolute;inset:-4px}
+.send-btn{position:relative}
+/* notes */
+.folders{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 2px;margin:2px -16px 14px;padding-left:16px;padding-right:16px;scrollbar-width:none}
+.folders::-webkit-scrollbar{display:none}
+.folder{flex:none;display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:0 14px;border-radius:999px;background:var(--tile);font-size:.882rem;color:var(--ink);position:relative;transition:background .3s ease,color .3s ease}
+.folder::after{content:"";position:absolute;inset:-3px -2px}
+.folder .cnt{color:var(--graphite);font-variant-numeric:tabular-nums}
+.folder[aria-pressed=true]{background:var(--ink);color:var(--ground)}
+.folder[aria-pressed=true] .cnt{color:var(--ground);opacity:.7}
+.folder .dot{width:8px;height:8px}
+.notes-list{padding:0}
+.note-row{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;text-align:left;padding:13px 16px 12px;border-top:1px solid var(--steel);min-height:56px}
+.note-row:first-child{border-top:0}
+.note-row:active{background:var(--ground)}
+.nr-title{font-size:1rem;font-weight:500;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.nr-meta{display:flex;gap:10px;font-size:.824rem;color:var(--graphite);max-width:100%;min-width:0}
+.nr-date{flex:none}
+.nr-prev{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.nr-folder{display:inline-flex;align-items:center;gap:6px;font-size:.765rem;color:var(--graphite);margin-top:2px}
+.nr-folder .dot{width:7px;height:7px}
+.note-row.enter{animation:rowin .7s cubic-bezier(.22,1,.36,1)}
+.sheet.tall{min-height:86vh;display:flex;flex-direction:column}
+.note-body{flex:1;width:100%;min-height:42vh;border:0;background:transparent;resize:none;font:inherit;font-size:1.059rem;line-height:1.5;padding:6px 2px;color:var(--ink)}
+.note-body::first-line{font-weight:600;font-size:1.25rem}
+.note-body:focus{outline:none}
+.note-tools{display:flex;flex-direction:column;gap:8px;background:var(--tile);border-radius:16px;padding:12px 14px;margin-top:10px}
+/* press and hold: the task lifts, the rest of the app blurs back */
+.ctx{position:fixed;inset:0;z-index:50}
+.ctx-dim{position:absolute;inset:0;background:rgba(242,243,241,.62);-webkit-backdrop-filter:blur(22px) saturate(1.15);backdrop-filter:blur(22px) saturate(1.15)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ctx-dim{background:rgba(0,0,0,.55)}}
+:root[data-theme="dark"] .ctx-dim{background:rgba(0,0,0,.55)}
+.ctx-scroll{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(env(safe-area-inset-top,0px) + 64px) 16px calc(env(safe-area-inset-bottom,0px) + 28px);display:flex;flex-direction:column;gap:12px}
+.ctx-scroll > *{width:100%;max-width:520px;margin-left:auto;margin-right:auto}
+.ctx-card{border-radius:20px;overflow:hidden;transform-origin:0 0;pointer-events:none;box-shadow:0 26px 60px rgba(16,18,20,.20),0 3px 10px rgba(16,18,20,.08);padding:0!important;flex:none}
+.ctx-card .row{transform:none!important;background:var(--tile)}
+.ctx-menu{display:flex;flex-direction:column;gap:12px}
+.ctx-menu .mstatus,.ctx-menu .slider-card,.ctx-menu .menu-list{margin:0}
+.ctx-cancel{margin-top:2px}
+.row-wrap.lifted > .row{visibility:hidden}
+/* press feedback everywhere (taste skill) */
+.btn:active,.chip:active,.folder:active,.mi:active,.ms:active,.act:active,.qa-btn:active,.send-btn:active,.iconbtn:active,.avatar-btn:active{transform:scale(.97)}
+.btn,.chip,.mi,.ms,.act,.iconbtn,.avatar-btn,.send-btn{transition:transform .25s cubic-bezier(.22,1,.36,1),background .3s ease,color .3s ease}
+.group.lst .row{transition:transform .42s cubic-bezier(.22,1,.36,1),background .3s ease}
+.seg .seg-pill{transition:transform .5s cubic-bezier(.22,1,.36,1),width .5s cubic-bezier(.22,1,.36,1)}
+.switch::after{transition:transform .42s cubic-bezier(.22,1,.36,1)}
+.switch{transition:background .35s ease}
+.toast{animation-duration:.6s}
+.sheet{animation:sheetup .6s cubic-bezier(.32,.72,0,1)}
+.scrim{animation:fade .5s ease}
+.sec-h .gh-act{margin:-8px -2px -8px auto;min-height:32px;padding:0 12px;border-radius:999px;background:var(--tile);color:var(--red);font-size:.765rem;font-weight:500;position:relative}
+.sec-h .gh-act::after{content:"";position:absolute;inset:-6px -2px}

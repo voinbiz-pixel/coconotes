@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
     title = a.body === "Still not done" ? "Still not done" : it.type === "call" ? `Time to call ${it.contact_name || ""}`.trim() : "Reminder";
     body = it.type === "call" && it.phone ? `${it.title}, ${it.phone}` : it.title;
   } else {
-    title = ({ request: `${who} asked you`, handoff: `${who} sent you something`, comment: `${who} sent a message`, created: `${who} added something for you`, done: `${who} finished it`, call_log: `${who} logged a call` } as Record<string, string>)[a.kind] ?? `${who} updated something`;
+    title = ({ request: `${who} asked you`, handoff: `${who} sent you something`, comment: `${who} sent a message`, created: `${who} added a reminder`, done: `${who} finished it`, call_log: `${who} logged a call` } as Record<string, string>)[a.kind] ?? `${who} updated something`;
     body = a.body ? `${it.title}: ${a.body}` : it.title;
   }
   const msg = JSON.stringify({ title, body, url: `/?item=${a.item_id}`, item: a.item_id, tag: `${a.item_id}-${a.kind}` });

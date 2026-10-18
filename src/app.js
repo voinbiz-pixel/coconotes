@@ -8,7 +8,7 @@ const TYPES = [['task', 'To-do'], ['call', 'Call'], ['request', 'Request'], ['re
 const STAGES = [['idea','Idea'],['script','Script'],['shoot','Shoot'],['edit','Edit'],['review','Review'],['ready','Ready'],['posted','Posted']];
 const PALETTE = [['Navy','#2B4C7E'],['Plum','#7A4A6B'],['Teal','#0F5C63'],['Forest','#2F5D3A'],['Brass','#7D6230'],['Cocoa','#6B4A2F'],['Violet','#5B4B8A'],['Slate','#4A545E']];
 const state = {
-  me: null, profiles: [], brands: [], items: [], activity: [],
+  me: null, profiles: [], brands: [], items: [], activity: [], notes: [], noteFolder: 'all', notesMissing: false,
   view: 'today', who: 'me', showDone: {}, calOpen: false, calMonth: null, calDay: null, actScope: 'mine', search: '',
   sheet: null, authMode: 'signin', flash: null, counts: {}, segPos: {}, prevChips: new Set(), introPlayed: false, calToken: null
 };
@@ -18,7 +18,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const REDUCED = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const DESKTOP = () => matchMedia('(min-width: 900px)').matches;
 const wait = ms => new Promise(r => setTimeout(r, ms));
-const EASE = 'cubic-bezier(.2,.8,.2,1)', SPRING = 'cubic-bezier(.3,1.35,.5,1)';
+const EASE = 'cubic-bezier(.22,1,.36,1)', SPRING = 'cubic-bezier(.3,1.25,.5,1)', EASE_IN = 'cubic-bezier(.4,0,.2,1)';
 function anim(el, frames, opts) { if (!el || REDUCED() || !el.animate) return Promise.resolve(); return el.animate(frames, opts).finished.catch(() => {}); }
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id' + Math.random().toString(36).slice(2));
 const nowISO = () => new Date().toISOString();
@@ -72,7 +72,7 @@ const isOpen = it => it.type === 'content' ? it.stage !== 'posted' : !it.done;
 const whenDay = it => it.remind_at ? dayOf(it.remind_at) : it.due_date || (it.type === 'content' ? it.post_date : null);
 const requestForMe = it => it.type === 'request' && isOpen(it) && ownedByMe(it) && it.created_by && it.created_by !== state.me.id;
 
-/* ---------- Typed shorthand and fallback voice parser ---------- */
+/* ---------- Typed shorthand parser ---------- */
 const WD = {sun:0,sunday:0,mon:1,monday:1,tue:2,tues:2,tuesday:2,wed:3,weds:3,wednesday:3,thu:4,thur:4,thurs:4,thursday:4,fri:5,friday:5,sat:6,saturday:6};
 const MONTHS = 'january february march april may june july august september october november december'.split(' ');
 const norm = s => s.toLowerCase().replace(/[^a-z0-9&]/g, '');
@@ -121,9 +121,10 @@ function parseClause(text) {
   if (!out.remind_at && time) { const d0 = date || today(); let r = atLocal(d0, time[0], time[1]); if (!date && new Date(r) < new Date()) r = atLocal(addDays(d0, 1), time[0], time[1]); out.remind_at = r; }
   else if (!out.remind_at && wantRemind && date) out.remind_at = atLocal(date, 9);
   else if (date) out.due_date = date;
-  if ((m = s.match(/^\s*(call|phone|ring)\s+(back\s+)?(.+?)(?=\s+(about|re|regarding|to|for|and)\s|\s*$)/i))) {
+  if ((m = s.match(/(?:^|\s)(call|phone|ring|dial|facetime)\s+(back\s+)?(?:with\s+)?(.+?)(?=\s+(about|re|regarding|to|for|and|on|at|by)\s|\s*$)/i))) {
     out.type = 'call'; out.contact_name = cap(m[3].trim().replace(/^(the|a|an)\s+/i, '').replace(/\s+back$/i, ''));
-  } else if (/^\s*(call|phone)\b/i.test(s)) out.type = 'call';
+  } else if (/(?:^|\s)(call|phone|ring|dial|facetime)(?=\s|$)|\bgive\s+.+?\s+a\s+(call|ring)\b|\b(call|phone)\s+back\b/i.test(s)) out.type = 'call';
+  if ((m = s.match(/\bgive\s+(.+?)\s+a\s+(call|ring)\b/i))) { out.type = 'call'; out.contact_name = out.contact_name || cap(m[1].trim()); }
   else if (out.type === 'task' && wantRemind && !s.trim()) out.type = 'reminder';
   out.title = cap(s.replace(/\s+/g, ' ').trim().replace(/^(to|and)\s+/i, ''));
   if (!out.title) out.title = out.type === 'call' && out.contact_name ? `Call ${out.contact_name}` : 'Reminder';
@@ -145,6 +146,12 @@ function seedDemo() {
   const B = n => state.brands.find(a => a.name === n).id;
   const mk = (type, title, o = {}) => ({ id: uid(), type, title, brand_id: null, done: false, status: o.done ? 'done' : 'todo', nag: false, nag_count: 0, last_fired_at: null, urgent: false, owner_ids: ['me'], due_date: null, remind_at: null, reminded: false, contact_name: null, phone: null, notes: '', links: [], stage: null, post_date: null, created_by: 'me', created_at: ago(30), updated_at: ago(2), completed_at: null, ...o });
   const h = new Date().getHours(), at = (hr, mi = 0) => atLocal(t, hr, mi);
+  const note = (body, o = {}) => ({ id: uid(), body, brand_id: null, created_by: 'me', created_at: ago(30), updated_at: ago(2), ...o });
+  state.notes = [
+    note('Supper club opening night\nJazz trio, low light, 1920s cocktail list. Ask David about a three-course prix fixe.', { brand_id: B('Greenwich & Delancey'), created_by: 'mk', updated_at: ago(1) }),
+    note('LOX reel ideas\nSlicing close-ups at 120 fps. Bagel steam in morning light. A "how we cure it" series.', { brand_id: B('LOX'), updated_at: ago(5) }),
+    note('Ask Imperial for a matte black napkin sample', { updated_at: ago(26) }),
+    note('Babka launch\nPre-order page live a week before. Gift box with ribbon in the brand color.', { brand_id: B('Madison and Park'), created_by: 'mk', updated_at: ago(50) })];
   state.items = [
     mk('request', 'Approve the tea reel music', { id: 'r1', brand_id: B('LOX'), created_by: 'mk', owner_ids: ['me'], due_date: t, notes: 'Two options in the Drive folder.' }),
     mk('request', 'Send the supper club mood photos', { id: 'r2', brand_id: B('Greenwich & Delancey'), created_by: 'mk', owner_ids: ['me'], due_date: addDays(t, 1) }),
@@ -155,6 +162,7 @@ function seedDemo() {
     mk('reminder', 'Post the babka story', { id: 'm2', brand_id: B('LOX'), owner_ids: ['mk'], remind_at: h < 17 ? at(17) : later(3) }),
     mk('task', 'Send David the rough cut', { brand_id: B('Chef David'), owner_ids: ['me'], due_date: addDays(t, 1), urgent: true }),
     mk('task', 'Book studio for Thursday', { owner_ids: ['me'], due_date: addDays(t, 2) }),
+    mk('call', 'Call David about the tasting menu', { contact_name: 'David', brand_id: B('Chef David'), owner_ids: ['me', 'mk'], due_date: t }),
     mk('task', 'Edit the tea reel captions', { owner_ids: ['me'], status: 'doing', due_date: t, brand_id: B('LOX') }),
     mk('task', 'Supper club menu cards', { owner_ids: ['mk'], status: 'doing', due_date: addDays(t, 2), brand_id: B('Greenwich & Delancey') }),
     mk('task', 'Order new ring light', { owner_ids: ['mk'], due_date: addDays(t, -1) }),
@@ -181,6 +189,8 @@ const api = {
       sb.from('activity').select('*').order('created_at', { ascending: false }).limit(300)]);
     for (const x of r) if (x.error) throw x.error;
     [state.profiles, state.brands, state.items, state.activity] = r.map(x => x.data);
+    const nr = await sb.from('notes').select('*').order('updated_at', { ascending: false });
+    state.notesMissing = !!nr.error; state.notes = nr.error ? [] : nr.data;
     state.me = state.profiles.find(x => x.id === state.me.id) || state.me;
   },
   async addItem(row) {
@@ -204,6 +214,9 @@ const api = {
     const a = { id: uid(), item_id, actor_id: state.me.id, to_id: to, kind, body, read: to === state.me.id, created_at: nowISO() };
     state.activity.unshift(a); return run(sb?.from('activity').insert(a));
   },
+  async addNote(row) { const n = { id: uid(), body: '', brand_id: null, created_by: state.me.id, created_at: nowISO(), updated_at: nowISO(), ...row }; state.notes.unshift(n); return (await run(sb?.from('notes').insert(n))) ? n : null; },
+  async updateNote(id, patch) { const n = noteById(id); if (!n) return; patch.updated_at = nowISO(); Object.assign(n, patch); return run(sb?.from('notes').update(patch).eq('id', id)); },
+  async deleteNote(id) { state.notes = state.notes.filter(x => x.id !== id); return run(sb?.from('notes').delete().eq('id', id)); },
   async markRead(ids) { if (!ids.length) return; state.activity.forEach(a => { if (ids.includes(a.id)) a.read = true; }); updateBadge(); return run(sb?.from('activity').update({ read: true }).in('id', ids)); },
   async updateProfile(patch) { Object.assign(state.me, patch); const p = person(state.me.id); if (p && p !== state.me) Object.assign(p, patch); return run(sb?.from('profiles').update(patch).eq('id', state.me.id)); },
   async addBrand(name) { const a = { id: uid(), name, color: PALETTE[(state.brands.length + 2) % PALETTE.length][1], sort: state.brands.length }; state.brands.push(a); return (await run(sb?.from('brands').insert(a))) ? a : null; },
@@ -217,39 +230,6 @@ const api = {
   }
 };
 function fail(err) { console.error(err); toast("That change didn't save. Check your connection, then try again."); if (!DEMO) api.loadAll().then(refresh).catch(() => {}); }
-
-/* ---------- Understanding voice notes ---------- */
-function aiContext() {
-  const n = new Date();
-  return { now: `${n.toLocaleDateString('en-US', { weekday: 'long' })}, ${toISO(n)} ${pad(n.getHours())}:${pad(n.getMinutes())}`, me: firstName(state.me), other: otherName(), brands: state.brands.map(b => b.name) };
-}
-function aiPrompt(text, c) {
-  return `You turn a spoken note into items for a to-do app shared by two people: ${c.me} (the speaker, "me") and ${c.other} ("other").
-Now: ${c.now} (local time). Brands: ${c.brands.join(', ') || 'none'}.
-Return ONLY JSON, no prose: {"items":[{"type":"task|call|request|reminder","title":"","owner":"me|other|both","due_date":"YYYY-MM-DD or null","remind_at":"YYYY-MM-DDTHH:MM or null","contact_name":"or null","phone":"or null","brand":"exact brand name or null","urgent":false,"notes":"or null"}]}
-Rules: one item per separate action. type "call" when the action is phoning someone. "request" when the speaker asks ${c.other} to do something (owner "other"). "reminder" when it is only a nudge with no other action. Otherwise "task". owner is who does it; "both" for we, us, or both of us. title: short, starts with a verb, no owner name, no date or time (example: "Call Harney rep about tea samples"). If a clock time is given, set remind_at; if only a day, set due_date. Resolve relative dates from Now. "In an hour" is now plus one hour. Morning 09:00, afternoon 16:00, evening or tonight 20:00. Put extra details in notes. Never invent details.
-
-Note: """${text}"""`;
-}
-function normalizeAI(list) {
-  return (list || []).filter(x => x && x.title).map(x => {
-    const type = ['task', 'call', 'request', 'reminder'].includes(x.type) ? x.type : 'task';
-    let remind = null; if (x.remind_at && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(x.remind_at)) { const d = new Date(x.remind_at.slice(0, 16)); if (!isNaN(d)) remind = d.toISOString(); }
-    return { type, title: cap(String(x.title).trim()), owner: ['me', 'other', 'both'].includes(x.owner) ? x.owner : (type === 'request' ? 'other' : 'me'),
-      due_date: /^\d{4}-\d{2}-\d{2}$/.test(x.due_date || '') ? x.due_date : null, remind_at: remind, contact_name: x.contact_name || null, phone: x.phone || null,
-      brand: x.brand ? (state.brands.find(b => b.name.toLowerCase() === String(x.brand).toLowerCase()) || matchBrand(x.brand))?.id || null : null, urgent: !!x.urgent, notes: x.notes || '' };
-  });
-}
-let sampleNS;
-const aiLikely = () => !!(window.claude?.use) || !DEMO;
-const aiNote = () => aiLikely() ? `<p class="ai-note">${ICON.note}<span>Your note is sent to Claude to sort it into items. Nothing is added until you check the cards and tap Add.</span></p>` : '';
-async function understand(text) {
-  try {
-    if (window.claude?.use) { sampleNS = sampleNS ?? await window.claude.use('sample'); if (sampleNS) { const v = await sampleNS.json(aiPrompt(text, aiContext()), { modelTier: 'quick' }); const r = normalizeAI(v?.items); if (r.length) return { items: r, ai: true }; } }
-    if (!DEMO) { const { data, error } = await sb.functions.invoke('understand', { body: { text, context: aiContext() } }); if (!error && data?.items) { const r = normalizeAI(data.items); if (r.length) return { items: r, ai: true }; } }
-  } catch (er) { console.warn('AI parse unavailable, using local parser', er); }
-  return { items: localParse(text).map(x => ({ ...x, brand: x.brand })), ai: false };
-}
 
 /* ---------- Selections ---------- */
 const urgency = it => requestForMe(it) ? 0 : (whenDay(it) && whenDay(it) < today() && isOpen(it)) ? 1 : it.urgent ? 2 : 3;
@@ -286,6 +266,7 @@ const ICON = {
   content: svg('<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/>'),
   mic: svg('<rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>'),
   send: svg('<path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5 20 4"/>'),
+  notes: svg('<rect x="4.5" y="3.5" width="15" height="17" rx="3"/><path d="M8 8.5h8M8 12h8M8 15.5h5"/>'),
   flag: svg('<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>'),
   chat: svg('<path d="M4.5 5.5h15a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V17.5h-1A1.5 1.5 0 0 1 3 16V7a1.5 1.5 0 0 1 1.5-1.5z"/>'),
   snooze: svg('<path d="M4 9h5l-5 6h5"/><path d="M13 5h4l-4 5h4"/><path d="M12 14.5a6.5 6.5 0 1 0 6.3 4.9"/>'),
@@ -298,12 +279,12 @@ const ICON = {
   note: svg('<path d="M5 4h10l4 4v12H5z"/><path d="M15 4v4h4M8.5 12h7M8.5 16h5"/>')
 };
 ICON.calendar = ICON.upcoming;
-const VIEWS = [['today', 'Today'], ['upcoming', 'Upcoming'], ['all', 'All']];
+const VIEWS = [['today', 'Today'], ['upcoming', 'Upcoming'], ['all', 'All'], ['notes', 'Notes']];
 
 /* ---------- Helpers for the list ---------- */
-const fromOther = it => !!it.created_by && it.created_by !== state.me.id && ownedByMe(it);
+const fromOther = it => false; // duo app: every task belongs to both of you
 const unreadFor = it => state.activity.some(a => a.item_id === it.id && a.to_id === state.me.id && !a.read);
-const matchWho = it => state.who === 'all' ? true : state.who === 'other' ? ownedByOther(it) : ownedByMe(it);
+const matchWho = it => true;
 const visible = it => it.type !== 'content';
 const lastMsg = it => state.activity.filter(a => a.item_id === it.id && a.kind === 'comment').reduce((m, a) => !m || a.created_at > m.created_at ? a : m, null);
 const unreadMsg = it => state.activity.some(a => a.item_id === it.id && a.kind === 'comment' && a.to_id === state.me.id && !a.read);
@@ -312,8 +293,6 @@ const missed = it => isOpen(it) && it.remind_at && new Date(it.remind_at) < new 
 const isCall = it => it.type === 'call' || !!it.phone;
 const SMART = [
   ['calls', 'Calls', 'call', it => isCall(it)],
-  ['from', `From ${'{o}'}`, 'request', it => fromOther(it)],
-  ['waiting', `Waiting on ${'{o}'}`, 'send', it => ownerKey(it) === 'other' && it.created_by === state.me.id],
   ['doing', 'In progress', 'half', it => doing(it)],
   ['urgent', 'Urgent', 'flag', it => it.urgent],
   ['undated', 'No date', 'all', it => !dateOf(it)],
@@ -368,7 +347,7 @@ function onTimeInput(el) {
 const dateOf = x => x.remind_at ? dayOf(x.remind_at) : x.due_date || null;
 const timeOf = x => { if (!x.remind_at) return null; const d = new Date(x.remind_at); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const whenFrom = (date, time) => ({ due_date: date || null, remind_at: date && time ? new Date(`${date}T${time}`).toISOString() : null });
-const typeFor = (x, ownerKeyV, creator) => x.phone ? 'call' : (ownerKeyV === 'other' && creator === state.me.id) ? 'request' : (x.type === 'call' ? 'task' : (x.type === 'request' && ownerKeyV !== 'other' ? 'task' : (x.type || 'task')));
+const typeFor = (x) => (x.phone || x.type === 'call') ? 'call' : (x.type === 'reminder' ? 'reminder' : 'task');
 function whenLabel(it, inToday, inDay) {
   const d = dateOf(it); if (!d) return '';
   if (missed(it) && d === today()) return `Missed ${clock(it.remind_at)}`;
@@ -386,13 +365,10 @@ function row(it, opts = {}) {
   const tags = [], w = whenLabel(it, opts.inToday, opts.inDay);
   if (doing(it) && !opts.inDoing) tags.push('<span class="st-doing">In progress</span>');
   if (w) tags.push(`<span class="${late ? 'red' : ''}">${esc(w)}</span>`);
-  if (fromOther(it)) tags.push(`<span class="from${unreadFor(it) && !done ? ' new' : ''}" style="--pc:${colorOf(it.created_by)}">From ${esc(nameOf(it.created_by))}</span>`);
-  else if (ownerKey(it) === 'other' && state.who !== 'other') tags.push(`<span>For ${esc(otherName())}</span>`);
-  else if (ownerKey(it) === 'both') tags.push('<span>Both of you</span>');
+  if (isCall(it) && !it.phone) tags.unshift(`<span class="calltag">${ICON.call}Call</span>`);
   if (b) tags.push(`<span class="acct"><span class="dot" style="background:${esc(b.color)}"></span>${esc(b.name)}</span>`);
   const notes = (it.notes || '').split('\n')[0].trim();
-  const showPeople = ownerKey(it) !== 'me' && state.who !== 'me' && !fromOther(it);
-  const acc = it.phone && !done ? `<a class="dial sm" href="${esc(telHref(it.phone))}" aria-label="Call ${esc(it.contact_name || it.phone)}">${ICON.call}</a>` : showPeople ? `<span class="row-people">${ownerStack(it)}</span>` : '';
+  const acc = it.phone && !done ? `<a class="dial sm" href="${esc(telHref(it.phone))}" aria-label="Call ${esc(it.contact_name || it.phone)}">${ICON.call}</a>` : '';
   return `<div class="row-wrap" data-rowwrap="${it.id}"><div class="row-actions" aria-hidden="true"><button class="ra ra-flag" data-rurgent="${it.id}" tabindex="-1">${ICON.flag}<span>${it.urgent ? 'Not urgent' : 'Urgent'}</span></button><button class="ra ra-del" data-rdelete="${it.id}" tabindex="-1">${ICON.trash}<span>Delete</span></button></div>
     <div class="row${done ? ' is-done' : ''}${state.flash === it.id ? ' enter' : ''}" data-swipe="${it.id}">
     <button class="check${it.urgent && !done ? ' urgent' : ''}${done ? ' done' : ''}${doing(it) ? ' doing' : ''}" data-toggle="${it.id}" aria-label="${done ? 'Mark not done' : 'Complete'}: ${esc(it.title)}${doing(it) ? ', in progress' : ''}"></button>
@@ -411,13 +387,7 @@ function actions() {
     <button class="avatar-btn" data-settings="1" aria-label="Your settings">${avatar(state.me.id, 32)}</button></div>`;
 }
 const pageHead = (title, sub = '', eyebrow = '') => `<header class="ph"><div class="ph-top"><span class="ph-eyebrow">${eyebrow}</span>${actions()}</div><h1 class="ph-title">${title}</h1>${sub ? `<p class="ph-sub">${sub}</p>` : ''}</header>`;
-function whoSeg() {
-  const o = other();
-  return `<div class="seg who" data-seg="who" role="group" aria-label="Whose reminders"><span class="seg-pill" aria-hidden="true"></span>
-    <button data-who="me" aria-pressed="${state.who === 'me'}">${avatar(state.me.id, 20)}You</button>
-    ${o.id ? `<button data-who="other" aria-pressed="${state.who === 'other'}">${avatar(o.id, 20)}${esc(firstName(o))}</button>` : ''}
-    <button data-who="all" aria-pressed="${state.who === 'all'}">Everyone</button></div>`;
-}
+function whoSeg() { return ''; }
 function doneBlock(list, key) {
   if (!list.length) return '';
   const showing = !!state.showDone[key];
@@ -431,18 +401,20 @@ function renderToday() {
   const now = new Date(), t = today(), all = openFor(), prog = all.filter(doing).sort(byWhen), list = all.filter(it => !doing(it) && dateOf(it) && dateOf(it) <= t);
   const over = list.filter(it => dateOf(it) < t).sort(byWhen), tod = list.filter(it => dateOf(it) === t).sort(byWhen);
   const doneToday = doneFor().filter(it => it.completed_at && dayOf(it.completed_at) === t);
-  const left = over.length + tod.length + prog.filter(it => !dateOf(it) || dateOf(it) <= t).length, who = state.who === 'me' ? '' : state.who === 'other' ? ` for ${otherName()}` : ' for both of you';
+  const left = over.length + tod.length + prog.filter(it => !dateOf(it) || dateOf(it) <= t).length, who = '';
   const sub = left ? `${left} left today${who}` : doneToday.length ? 'All done for today' : `Nothing due today${who}`;
   return `${pageHead('Today', `${greeting()}, ${esc(firstName(state.me))}. ${esc(sub)}.`, esc(now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })))}
     ${whoSeg()}
-    ${section('In progress', prog, { inDoing: true, inToday: true }) + section('Overdue', over, { red: true, action: ['movetoday', `Move ${over.length} to today`] }) + section('Today', tod, { inToday: true }) || `<div class="empty-big">${MARK(56)}<p><b>${doneToday.length ? 'All done for today.' : 'Nothing due today.'}</b><br>Add one below, or tap the mic and say it.</p></div>`}
+    ${section('In progress', prog, { inDoing: true, inToday: true }) + section('Overdue', over, { red: true, action: ['movetoday', `Move ${over.length} to today`] }) + section('Today', tod, { inToday: true }) || `<div class="empty-big">${MARK(56)}<p><b>${doneToday.length ? 'All done for today.' : 'Nothing due today.'}</b><br>Type one in the bar below.</p></div>`}
     ${doneBlock(doneToday, 'today')}`;
 }
-function dayHeader(d) { const n = diffDays(today(), d); return n === 1 ? 'Tomorrow' : n < 7 ? fmtDate(d, { weekday: 'long' }) : fmtDate(d, { weekday: 'short', month: 'short', day: 'numeric' }); }
+function dayHeader(d) { const n = diffDays(today(), d); const main = n === 1 ? 'Tomorrow' : n < 7 ? fmtDate(d, { weekday: 'long' }) : fmtDate(d, { weekday: 'long' });
+  const sub = n === 1 ? fmtDate(d, { weekday: 'long', month: 'short', day: 'numeric' }) : fmtDate(d, { month: 'long', day: 'numeric' });
+  return `${esc(main)}</span><span class="sec-date">${esc(sub)}`; }
 function calendarBlock() {
   const t = today(), items = state.items.filter(it => visible(it) && isOpen(it) && matchWho(it) && dateOf(it));
   const byDay = {}; items.forEach(it => { const d = dateOf(it) < t ? t : dateOf(it); (byDay[d] = byDay[d] || []).push(it); });
-  const dots = d => (byDay[d] || []).slice(0, 3).map(it => { const k = ownerKey(it); return `<i class="${k === 'both' ? 'both' : ''}" style="--c:${k === 'both' ? 'var(--ink)' : colorOf(owners(it)[0])}"></i>`; }).join('');
+  const dots = d => (byDay[d] || []).slice(0, 3).map(it => `<i style="--c:${esc(brand(it.brand_id)?.color || 'var(--ink)')}"></i>`).join('');
   const cell = (d, cls = '') => `<button class="cd${d === t ? ' is-today' : ''}${d === state.calDay ? ' is-sel' : ''}${d < t ? ' past' : ''} ${cls}" data-calday="${d}" aria-label="${esc(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))}, ${(byDay[d] || []).length} reminders">
     <span class="cd-n">${+d.slice(8)}</span><span class="cd-dots">${dots(d)}</span></button>`;
   if (!state.calOpen) {
@@ -454,8 +426,7 @@ function calendarBlock() {
   const cells = Array.from({ length: off }, () => '<span></span>').concat(Array.from({ length: n }, (_, i) => cell(`${m}-${pad(i + 1)}`)));
   return `<div class="cal-card open" id="cal"><div class="cal-top"><button class="iconbtn sm" data-calmove="-1" aria-label="Previous month">${ICON.left}</button><span class="cal-m">${esc(first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))}</span><button class="iconbtn sm" data-calmove="1" aria-label="Next month">${ICON.right}</button>
       <button class="cal-tog" data-calopen="0" aria-expanded="true">Week</button></div>
-    <div class="cal-grid wd">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(x => `<span>${x}</span>`).join('')}</div><div class="cal-grid cal-days">${cells.join('')}</div>
-    <div class="legend">${avatar(state.me.id, 14)}<span>You</span>${other().id ? `${avatar(other().id, 14)}<span>${esc(otherName())}</span>` : ''}<span class="lg-both ring"></span><span>Both</span></div></div>`;
+    <div class="cal-grid wd">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(x => `<span>${x}</span>`).join('')}</div><div class="cal-grid cal-days">${cells.join('')}</div></div>`;
 }
 function renderUpcoming() {
   const t = today(), list = openFor().filter(it => dateOf(it) && dateOf(it) > t).sort(byWhen);
@@ -483,43 +454,129 @@ function smartGrid() {
   return `<div class="smart">${tiles.filter(([k, , , n]) => k !== 'msgs' || n).map(([k, l, ic, n]) => `<button class="smart-tile" data-smart="${k}"><span class="st-ic ${k}">${ic === 'half' ? '<span class="half-ic"></span>' : ICON[ic]}</span><span class="st-n">${n}</span><span class="st-l">${esc(l)}</span></button>`).join('')}</div>
     ${brands.length ? `<div class="chips brands-row">${brands.map(([b, n]) => `<button class="chip" data-smart="${b.id}"><span class="dot" style="background:${esc(b.color)}"></span>${esc(b.name)}<span class="cnt">${n}</span></button>`).join('')}</div>` : ''}`;
 }
+/* ---------- Notes: ideas and requests, jotted fast ---------- */
+const noteById = id => state.notes.find(n => n.id === id);
+const noteTitle = n => (n.body || '').split('\n')[0].trim() || 'New note';
+const notePreview = n => (n.body || '').split('\n').slice(1).join(' ').replace(/\s+/g, ' ').trim();
+function noteWhen(ts) { const d = dayOf(ts), n = diffDays(d, today()); return n === 0 ? clock(ts) : n === 1 ? 'Yesterday' : n < 7 ? fmtDate(d, { weekday: 'long' }) : fmtDate(d, { month: 'short', day: 'numeric' }); }
+function noteRow(n) {
+  const b = brand(n.brand_id), pv = notePreview(n);
+  return `<button class="note-row${state.flash === n.id ? ' enter' : ''}" data-note="${n.id}" data-k="${n.id}"><span class="nr-title">${esc(noteTitle(n))}</span>
+    <span class="nr-meta"><span class="nr-date">${esc(noteWhen(n.updated_at))}</span>${pv ? `<span class="nr-prev">${esc(pv)}</span>` : ''}</span>
+    ${b && state.noteFolder === 'all' ? `<span class="nr-folder"><span class="dot" style="background:${esc(b.color)}"></span>${esc(b.name)}</span>` : ''}</button>`;
+}
+function renderNotes() {
+  const f = state.noteFolder || 'all', all = state.notes.slice().sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const inF = n => f === 'all' ? true : f === 'none' ? !n.brand_id : n.brand_id === f, list = all.filter(inF);
+  const folders = [['all', 'All', null, all.length], ...state.brands.map(b => [b.id, b.name, b.color, all.filter(n => n.brand_id === b.id).length]), ['none', 'No folder', null, all.filter(n => !n.brand_id).length]];
+  if (state.notesMissing) return `${pageHead('Notes')}<div class="empty-big"><p><b>Notes need one quick setup step.</b><br>Run upgrade-4.sql in Supabase, then reopen coconotes.</p></div>`;
+  return `${pageHead('Notes', all.length ? `${all.length} ${all.length === 1 ? 'note' : 'notes'}, shared with ${esc(otherName())}` : `Ideas and requests, shared with ${esc(otherName())}`)}
+    <div class="folders" role="group" aria-label="Folders">${folders.map(([k, l, c, n]) => `<button class="folder" data-folder="${k}" data-k="f-${k}" aria-pressed="${f === k}">${c ? `<span class="dot" style="background:${esc(c)}"></span>` : ''}<span>${esc(l)}</span><span class="cnt">${n}</span></button>`).join('')}</div>
+    ${list.length ? `<div class="group lst notes-list">${list.map(noteRow).join('')}</div>` : `<div class="empty-big"><p><b>Nothing here yet.</b><br>Type an idea in the bar below and it lands ${f === 'all' || f === 'none' ? 'here' : `in ${esc(brand(f)?.name || 'this folder')}`}.</p></div>`}`;
+}
+async function newNote(body = '', open = false) {
+  const f = state.noteFolder, n = await api.addNote({ body, brand_id: f !== 'all' && f !== 'none' ? f : null }); if (!n) return;
+  state.flash = n.id; renderView();
+  if (open) openNote(n.id); else toast('Note saved', 'Open', () => openNote(n.id));
+}
+function openNote(id) { state.sheet = { kind: 'note', id }; renderNote(); }
+function renderNote() {
+  const n = noteById(state.sheet?.id); if (!n) return closeSheet();
+  showSheet(`${top(`${n.created_by === state.me.id ? 'You' : esc(nameOf(n.created_by))}, ${esc(noteWhen(n.updated_at))}`, 'Done')}
+    <textarea id="note-body" class="note-body" placeholder="Start typing. The first line becomes the title." aria-label="Note">${esc(n.body)}</textarea>
+    <div class="note-tools"><span class="fc-l">Folder</span>${chipRow('nfolder', [['', 'None'], ...state.brands.map(x => [x.id, x.name, x.color])], n.brand_id || '')}</div>
+    <div class="actions"><button class="act" data-note-task="1">${ICON.task}<span>Make it a reminder</span></button><button class="act" data-note-del="1">${ICON.trash}<span>Delete</span></button></div>`, 'Note');
+  $('#sheet-root .sheet')?.classList.add('tall');
+}
+let noteTimer = null;
+function saveNoteSoon(id, body) { clearTimeout(noteTimer); noteTimer = setTimeout(async () => { await api.updateNote(id, { body }); if (state.view === 'notes') renderView(); }, 500); }
+async function noteToTask() {
+  const n = noteById(state.sheet?.id); if (!n) return;
+  const p = parseClause(noteTitle(n)); const rest = (n.body || '').split('\n').slice(1).join('\n').trim();
+  const it = await api.addItem({ type: p.type === 'call' ? 'call' : 'task', title: p.title || noteTitle(n), notes: rest, contact_name: p.contact_name, phone: p.phone, owner_ids: idsFor('both'), due_date: p.due_date || (p.remind_at ? dayOf(p.remind_at) : null), remind_at: p.remind_at, brand_id: n.brand_id });
+  if (!it) return; api.log(it.id, 'created', ''); closeSheet(); state.flash = it.id;
+  toast(`Added to ${dateOf(it) ? (dateOf(it) <= today() ? 'Today' : 'Upcoming') : 'All'}`, 'Open', () => openItem(it.id));
+}
+async function deleteNoteUndo(id) {
+  const n = noteById(id); if (!n) return; const copy = { ...n };
+  closeSheet(); await api.deleteNote(id); renderView();
+  toast('Note deleted', 'Undo', async () => { state.notes.unshift(copy); await run(sb?.from('notes').insert(copy)); renderView(); });
+}
 function searchResults() {
   const q = state.search.trim().toLowerCase(); if (!q) return '<p class="lbl" style="padding:12px 4px">Search reminders, names, numbers, and notes.</p>';
   const its = state.items.filter(it => visible(it) && [it.title, it.notes, it.contact_name, it.phone, brand(it.brand_id)?.name].join(' ').toLowerCase().includes(q)).sort((a, b) => isOpen(b) - isOpen(a) || byWhen(a, b));
-  return its.length ? `<section class="group lst">${its.map(it => row(it)).join('')}</section>` : `<div class="group"><div class="empty" style="border:0">Nothing matches "${esc(state.search)}".</div></div>`;
+  const ns = state.notes.filter(n => [n.body, brand(n.brand_id)?.name].join(' ').toLowerCase().includes(q));
+  if (!its.length && !ns.length) return `<div class="group"><div class="empty" style="border:0">Nothing matches "${esc(state.search)}".</div></div>`;
+  return `${its.length ? `<section class="sec"><h2 class="sec-h"><span>Reminders</span><span class="sec-n">${its.length}</span></h2><div class="group lst">${its.map(it => row(it)).join('')}</div></section>` : ''}
+    ${ns.length ? `<section class="sec"><h2 class="sec-h"><span>Notes</span><span class="sec-n">${ns.length}</span></h2><div class="group lst notes-list">${ns.map(noteRow).join('')}</div></section>` : ''}`;
 }
 function renderSearch() { return `${pageHead('Search')}<label class="sr-only" for="search-input">Search</label><input id="search-input" class="input" type="search" placeholder="Imperial, tea, David" value="${esc(state.search)}" autocomplete="off"><div id="search-results">${searchResults()}</div>`; }
 
+const keyOf = n => n.nodeType === 1 ? (n.id || n.getAttribute('data-k') || n.getAttribute('data-rowwrap') || n.getAttribute('data-note') || null) : null;
+function morphAttrs(a, b) {
+  for (const at of [...a.attributes]) if (!b.hasAttribute(at.name) && at.name !== 'style') a.removeAttribute(at.name);
+  for (const at of [...b.attributes]) if (a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
+}
+function morphNode(a, b) {
+  if (a.nodeType === 3 || a.nodeType === 8) { if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue; return; }
+  morphAttrs(a, b);
+  if (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') {
+    if (a !== document.activeElement) { const v = a.tagName === 'TEXTAREA' ? b.textContent : (b.getAttribute('value') ?? ''); if (a.value !== v) a.value = v; }
+    return;
+  }
+  morphChildren(a, b);
+}
+function morphChildren(a, b) {
+  const old = [...a.childNodes], neu = [...b.childNodes], keyed = new Map(), used = new Set();
+  old.forEach(n => { const k = keyOf(n); if (k) keyed.set(k, n); });
+  let oi = 0;
+  neu.forEach((nb, idx) => {
+    const k = keyOf(nb); let match = null;
+    if (k) { const c = keyed.get(k); if (c && !used.has(c) && c.nodeName === nb.nodeName) match = c; }
+    else { while (oi < old.length && (used.has(old[oi]) || keyOf(old[oi]))) oi++; const c = old[oi]; if (c && c.nodeType === nb.nodeType && c.nodeName === nb.nodeName) { match = c; oi++; } }
+    const ref = a.childNodes[idx] || null;
+    if (match) { used.add(match); if (match !== ref) a.insertBefore(match, ref); morphNode(match, nb); }
+    else a.insertBefore(nb, ref);
+  });
+  old.forEach(n => { if (!used.has(n) && n.parentNode === a) a.removeChild(n); });
+}
+function morphHTML(el, html) { const t = document.createElement('template'); t.innerHTML = html; morphChildren(el, t.content); }
 function renderView(transition) {
   const v = $('#view'); if (!v) return;
-  v.innerHTML = { today: renderToday, upcoming: renderUpcoming, all: renderAll, search: renderSearch }[state.view]();
+  const html = { today: renderToday, upcoming: renderUpcoming, all: renderAll, notes: renderNotes, search: renderSearch }[state.view]();
+  if (transition === 'page' || state.lastView !== state.view || !v.firstChild) v.innerHTML = html; else morphHTML(v, html);
+  state.lastView = state.view;
+  const qi = $('#qa-input'); if (qi) { const ph = state.view === 'notes' ? 'New note' : 'New reminder'; if (qi.placeholder !== ph) { qi.placeholder = ph; $('label[for=qa-input]').textContent = ph; } }
   $$('[data-view]').forEach(b => { if (!b.closest('#view')) b.setAttribute('aria-current', b.dataset.view === state.view ? 'page' : 'false'); });
   if (state.view === 'today' && !state.introPlayed) { state.introPlayed = true; if (!REDUCED()) { v.classList.add('intro'); setTimeout(() => v.classList.remove('intro'), 1500); } }
-  else if (transition === 'page') anim(v, [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: EASE });
-  else if (transition === 'filter') $$('.group', v).forEach((g, i) => anim(g, [{ opacity: 0 }, { opacity: 1 }], { duration: 180, delay: Math.min(i, 6) * 25, easing: EASE, fill: 'backwards' }));
+  else if (transition === 'page') anim(v, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: EASE });
+  else if (transition === 'filter') $$('.group', v).forEach((g, i) => anim(g, [{ opacity: .35 }, { opacity: 1 }], { duration: 320, delay: Math.min(i, 6) * 30, easing: EASE }));
   placeSegs(v); updateBadge();
   state.flash = null;
 }
+const placedPills = new WeakSet();
 function placeSegs(root = document, instant) {
   $$('.seg[data-seg]', root).forEach(seg => {
-    const pill = $('.seg-pill', seg), btn = $('button[aria-pressed=true]', seg), key = seg.dataset.seg;
+    const pill = $('.seg-pill', seg), btn = $('button[aria-pressed=true]', seg);
     if (!pill) return; if (!btn) { pill.style.opacity = '0'; return; }
-    const to = { x: btn.offsetLeft, w: btn.offsetWidth }, from = state.segPos[key]; state.segPos[key] = to; pill.style.opacity = '1';
-    if (from && !instant && !REDUCED() && (from.x !== to.x || from.w !== to.w)) { pill.style.transition = 'none'; pill.style.transform = `translateX(${from.x}px)`; pill.style.width = from.w + 'px'; pill.offsetWidth; pill.style.transition = ''; }
-    pill.style.transform = `translateX(${to.x}px)`; pill.style.width = to.w + 'px';
+    const tf = `translateX(${btn.offsetLeft}px)`, w = btn.offsetWidth + 'px', first = instant || !placedPills.has(pill);
+    if (pill.style.transform === tf && pill.style.width === w && !first) return;
+    if (first) pill.style.transition = 'none';
+    pill.style.transform = tf; pill.style.width = w; pill.style.opacity = '1';
+    if (first) { pill.offsetWidth; pill.style.transition = ''; placedPills.add(pill); }
   });
 }
 function refresh() { renderView(); if (state.sheet) rerenderSheetSafe(); }
 
 /* ---------- Shell ---------- */
 function renderShell() {
-  $('#app').innerHTML = `<div class="shell">
+  $('#app').innerHTML = `<div class="statusback" aria-hidden="true"></div><div class="shell">
     <header class="topbar"><span class="sr-only">coconotes</span>
       <nav class="topnav" aria-label="Main">${VIEWS.map(([k, l]) => `<button data-view="${k}">${l}</button>`).join('')}</nav>
       <span class="top-right">${DEMO ? '<span class="demo-badge">Demo</span>' : ''}${actions()}</span></header>
     <main id="view"></main>
     <div class="dock"><div class="dock-inner">
-      <div class="dock-row"><button class="micbtn" data-voice="1" aria-label="Add by voice">${ICON.mic}</button>
+      <div class="dock-row">
       <form class="qa" id="qa" autocomplete="off"><label class="sr-only" for="qa-input">New reminder</label>
         <input id="qa-input" enterkeyhint="done" placeholder="New reminder" aria-describedby="qa-chips">
         <button class="qa-btn" id="qa-btn" type="submit" aria-label="New reminder with details">${ICON.plus}</button></form></div>
@@ -533,42 +590,41 @@ function renderShell() {
 function chipsFor(p) {
   const c = [];
   if (p.remind_at) c.push(['r' + p.remind_at, `<span class="chip">${esc(relWhen(p.remind_at))}</span>`]); else if (p.due_date) c.push(['d' + p.due_date, `<span class="chip">${esc(rel(p.due_date))}</span>`]);
-  if (p.owner !== 'me') c.push(['o' + p.owner, `<span class="chip chip-av">${p.owner === 'both' ? `<span class="stack">${avatar(state.me.id, 20)}${avatar(other().id, 20)}</span>Both of you` : `${avatar(other().id, 20)}For ${esc(otherName())}`}</span>`]);
-  if (p.phone) c.push(['p', `<span class="chip"><span class="chip-ic">${ICON.call}</span>${esc(p.phone)}</span>`]);
+  if (p.type === 'call') c.push(['c' + (p.contact_name || ''), `<span class="chip"><span class="chip-ic">${ICON.call}</span>Call${p.contact_name ? ` ${esc(p.contact_name)}` : ''}</span>`]);
+  if (p.phone) c.push(['p', `<span class="chip">${esc(p.phone)}</span>`]);
   if (p.brand) { const a = brand(p.brand); c.push(['a' + p.brand, `<span class="chip"><span class="dot" style="background:${esc(a.color)}"></span>${esc(a.name)}</span>`]); }
   if (p.urgent) c.push(['u', '<span class="chip u">Urgent</span>']);
   const prev = state.prevChips; state.prevChips = new Set(c.map(x => x[0]));
   return c.map(([k, h]) => prev.has(k) ? h : h.replace('class="chip', 'class="chip pop')).join('');
 }
 function quickParse(text) {
-  const p = parseClause(text);
-  if (state.who === 'other' && p.owner === 'me' && !/@|\b(me|i|i'll|we|us|both|myself)\b/i.test(text)) p.owner = 'other';
-  if (state.who === 'all' && p.owner === 'me' && !/@|\b(me|i|i'll|myself)\b/i.test(text)) p.owner = p.owner;
+  const p = parseClause(text); p.owner = 'both';
   if (!p.due_date && !p.remind_at) { if (state.view === 'today') p.due_date = today(); else if (state.view === 'upcoming') p.due_date = addDays(today(), 1); }
   return p;
 }
 function qaPreview() {
   const el = $('#qa-input'); if (!el) return;
   const v = el.value.trim(), btn = $('#qa-btn'); if (!v) state.prevChips = new Set();
-  $('#qa-chips').innerHTML = v ? chipsFor(quickParse(el.value)) : (document.activeElement === el ? `<span class="qa-hint">Type it the way you'd say it: call Imperial at 3, or ask ${esc(otherName().toLowerCase())} to send the photos tomorrow</span>` : '');
+  $('#qa-chips').innerHTML = state.view === 'notes' ? '' : v ? chipsFor(quickParse(el.value)) : (document.activeElement === el ? `<span class="qa-hint">Type it the way you'd say it: call David at 3, or send the menu Friday #LOX</span>` : '');
   const want = v ? 'add' : 'plus';
-  if (btn.dataset.mode !== want) { btn.dataset.mode = want; btn.innerHTML = v ? '<span>Add</span>' : ICON.plus; btn.setAttribute('aria-label', v ? 'Add' : 'New reminder with details'); btn.classList.toggle('wide', !!v); }
+  if (btn.dataset.mode !== want) { btn.dataset.mode = want; btn.innerHTML = v ? '<span>Add</span>' : ICON.plus; btn.setAttribute('aria-label', v ? 'Add' : state.view === 'notes' ? 'New note' : 'New reminder with details'); btn.classList.toggle('wide', !!v); }
 }
 async function addParsed(p) {
-  const ownerIds = idsFor(p.owner);
-  const type = p.phone || p.type === 'call' ? 'call' : (p.owner === 'other' ? 'request' : (p.type === 'reminder' ? 'reminder' : 'task'));
+  const ownerIds = idsFor('both');
+  const type = p.phone || p.type === 'call' ? 'call' : (p.type === 'reminder' ? 'reminder' : 'task');
   const it = await api.addItem({ type, title: p.title, owner_ids: ownerIds, due_date: p.due_date || (p.remind_at ? dayOf(p.remind_at) : null), remind_at: p.remind_at, contact_name: p.contact_name, phone: p.phone, brand_id: p.brand, urgent: !!p.urgent, notes: p.notes || '' });
   if (!it) return null;
-  if (ownedByOther(it)) api.log(it.id, ownedByMe(it) ? 'created' : 'request', '');
+  api.log(it.id, 'created', '');
   return it;
 }
 function whereItLives(it) {
-  const d = dateOf(it); if (!matchWho(it)) return ownedByOther(it) && !ownedByMe(it) ? `${otherName()}'s list` : 'Everyone';
+  const d = dateOf(it);
   if (!d) return 'All'; return d <= today() ? 'Today' : 'Upcoming';
 }
 async function submitQuick(e) {
   e.preventDefault();
   const input = $('#qa-input');
+  if (state.view === 'notes') { const v = input.value.trim(); input.value = ''; qaPreview(); return newNote(v, !v); }
   if (!input.value.trim()) return openNew();
   const p = quickParse(input.value);
   if (!p.title) { $('#qa-err').textContent = 'Type what needs doing, then add it.'; return input.focus(); }
@@ -576,15 +632,15 @@ async function submitQuick(e) {
   const it = await addParsed(p); if (!it) return;
   state.flash = it.id; refresh();
   const where = whereItLives(it), here = { today: 'Today', upcoming: 'Upcoming', all: 'All' }[state.view];
-  toast(ownedByOther(it) && !ownedByMe(it) ? `Sent to ${otherName()}` : where === here || state.view === 'all' ? 'Added' : `Added to ${where}`, 'Open', () => openItem(it.id));
+  toast(where === here || state.view === 'all' ? 'Added' : `Added to ${where}`, 'Open', () => openItem(it.id));
 }
 
 /* ---------- Complete ---------- */
-function collapse(el) { const h = el.offsetHeight; el.style.overflow = 'hidden'; return anim(el, [{ height: h + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 200, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' }); }
+function collapse(el) { const h = el.offsetHeight; el.style.overflow = 'hidden'; return anim(el, [{ height: h + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 360, easing: EASE_IN, fill: 'forwards' }); }
 async function toggleTask(id, btn) {
   const it = itemById(id); if (!it) return;
   const wrap = btn?.closest('.row-wrap'), was = it.done;
-  if (!was && wrap) { btn.classList.add('completing'); wrap.querySelector('.row')?.classList.add('completing'); if (navigator.vibrate) navigator.vibrate(10); if (!REDUCED() && !state.showDone[state.view]) { await wait(260); await collapse(wrap); } }
+  if (!was && wrap) { btn.classList.add('completing'); wrap.querySelector('.row')?.classList.add('completing'); if (navigator.vibrate) navigator.vibrate(10); if (!REDUCED() && !state.showDone[state.view]) { await wait(380); await collapse(wrap); } }
   await api.updateItem(id, { done: !was });
   if (!was && (ownedByOther(it) || fromOther(it))) api.log(id, 'done', '', fromOther(it) ? it.created_by : other().id);
   state.flash = was ? id : null; refresh();
@@ -621,15 +677,49 @@ function bindSwipe() {
 }
 function openMenu(id) {
   const it = itemById(id); if (!it) return;
-  state.sheet = { kind: 'menu', id };
+  closeSwipes();
+  const wrap = $(`[data-rowwrap="${id}"]`), rowEl = wrap?.querySelector('.row'), r = rowEl?.getBoundingClientRect();
+  state.sheet = { kind: 'menu', id }; lastFocus = document.activeElement;
   const st = it.done ? 'done' : it.status === 'doing' ? 'doing' : 'todo';
-  showSheet(`${top(esc(it.title), 'Cancel')}
-    <div class="mstatus" role="radiogroup" aria-label="Status">${[['todo', 'Not started', ''], ['doing', 'In progress', 'doing'], ['done', 'Done', 'done']].map(([k, l, c]) => `<button class="ms" data-mstatus="${k}" role="radio" aria-checked="${st === k}"><span class="check ${c}" aria-hidden="true"></span><span>${l}</span></button>`).join('')}</div>
-    ${isOpen(it) ? snoozeSlider() : ''}
-    <div class="menu-list">
-      <button class="mi" data-murgent="1">${ICON.flag}<span>${it.urgent ? 'Not urgent' : 'Mark urgent'}</span></button>
-      <button class="mi" data-mopen="1">${ICON.dots}<span>Details</span></button>
-      <button class="mi red" data-mdelete="1">${ICON.trash}<span>Delete</span></button></div>`, 'Reminder actions');
+  const clone = rowEl ? rowEl.cloneNode(true) : null;
+  if (clone) { clone.classList.remove('pressing', 'open', 'enter'); clone.style.transform = ''; clone.removeAttribute('data-swipe'); clone.querySelectorAll('[data-toggle],[data-open]').forEach(x => { x.removeAttribute('data-toggle'); x.removeAttribute('data-open'); x.setAttribute('tabindex', '-1'); }); clone.querySelectorAll('a').forEach(a => a.setAttribute('tabindex', '-1')); }
+  $('#sheet-root').innerHTML = `<div class="ctx" role="dialog" aria-modal="true" aria-label="Actions for ${esc(it.title)}">
+    <div class="ctx-dim"></div>
+    <div class="ctx-scroll" data-ctxout="1">
+      <div class="ctx-card group lst" id="ctx-card" aria-hidden="true"></div>
+      <div class="ctx-menu">
+        <div class="mstatus" role="radiogroup" aria-label="Status">${[['todo', 'Not started', ''], ['doing', 'In progress', 'doing'], ['done', 'Done', 'done']].map(([k, l, c]) => `<button class="ms" data-mstatus="${k}" role="radio" aria-checked="${st === k}"><span class="check ${c}" aria-hidden="true"></span><span>${l}</span></button>`).join('')}</div>
+        ${isOpen(it) ? snoozeSlider() : ''}
+        <div class="menu-list">
+          <button class="mi" data-murgent="1">${ICON.flag}<span>${it.urgent ? 'Not urgent' : 'Mark urgent'}</span></button>
+          <button class="mi" data-mopen="1">${ICON.dots}<span>Details</span></button>
+          <button class="mi red" data-mdelete="1">${ICON.trash}<span>Delete</span></button></div>
+        <button class="btn quiet wide ctx-cancel sheet-close" data-close="1">Cancel</button>
+      </div></div></div>`;
+  const card = $('#ctx-card'); if (clone) card.appendChild(clone); else card.innerHTML = row(it);
+  document.body.style.overflow = 'hidden'; document.body.classList.add('sheet-open');
+  wrap?.classList.add('lifted');
+  if (!REDUCED()) {
+    const cr = card.getBoundingClientRect();
+    if (r && r.height) anim(card, [{ transform: `translate(${(r.left - cr.left).toFixed(1)}px,${(r.top - cr.top).toFixed(1)}px) scale(${(r.width / cr.width).toFixed(4)})`, boxShadow: '0 0 0 rgba(0,0,0,0)', borderRadius: '0px' },
+      { transform: 'translate(0,0) scale(1.025)', offset: .72 }, { transform: 'none' }], { duration: 620, easing: EASE });
+    anim($('.ctx-dim'), [{ opacity: 0 }, { opacity: 1 }], { duration: 480, easing: 'ease-out' });
+    $$('.ctx-menu > *').forEach((el, k) => anim(el, [{ opacity: 0, transform: 'translateY(16px) scale(.98)' }, { opacity: 1, transform: 'none' }], { duration: 520, delay: 140 + k * 70, easing: EASE, fill: 'backwards' }));
+  }
+  setTimeout(() => $('.ctx [data-mstatus]')?.focus({ preventScroll: true }), 80);
+}
+function closeMenu() {
+  const ctx = $('#sheet-root .ctx:not(.closing)'); if (!ctx) return;
+  const id = state.sheet?.id; state.sheet = null; document.body.style.overflow = ''; document.body.classList.remove('sheet-open');
+  const wrap = $(`[data-rowwrap="${id}"]`), card = $('#ctx-card', ctx), menu = $('.ctx-menu', ctx);
+  const done = () => { ctx.remove(); wrap?.classList.remove('lifted'); };
+  ctx.classList.add('closing'); if (lastFocus && document.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
+  if (REDUCED()) return done();
+  anim($('.ctx-dim', ctx), [{ opacity: 1 }, { opacity: 0 }], { duration: 420, easing: 'ease-in-out', fill: 'forwards' });
+  anim(menu, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(12px) scale(.98)' }], { duration: 300, easing: EASE_IN, fill: 'forwards' });
+  const r = wrap?.querySelector('.row')?.getBoundingClientRect(), cr = card.getBoundingClientRect();
+  if (r && r.height && wrap.isConnected) anim(card, [{ transform: 'none' }, { transform: `translate(${(r.left - cr.left).toFixed(1)}px,${(r.top - cr.top).toFixed(1)}px) scale(${(r.width / cr.width).toFixed(4)})`, boxShadow: '0 0 0 rgba(0,0,0,0)', borderRadius: '0px' }], { duration: 460, easing: EASE, fill: 'forwards' }).then(done);
+  else anim(card, [{ opacity: 1 }, { opacity: 0, transform: 'scale(.96)' }], { duration: 320, easing: EASE_IN, fill: 'forwards' }).then(done);
 }
 async function setStatus(id, st) {
   const it = itemById(id); if (!it) return; const was = it.done;
@@ -655,8 +745,10 @@ async function moveOverdueToToday() {
 let lastFocus = null;
 function showSheet(html, label) {
   const ex = $('#sheet-root .sheet:not(.closing)'), key = `${state.sheet?.kind}:${state.sheet?.id || ''}`;
-  if (ex) { const same = ex.dataset.key === key, y = same ? ex.scrollTop : 0; ex.dataset.key = key; ex.setAttribute('aria-label', label); ex.innerHTML = `<div class="grabber"></div>${html}`; ex.scrollTop = y;
-    if (!same) anim(ex, [{ opacity: .5 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' }); return; }
+  if (ex) { const same = ex.dataset.key === key; ex.dataset.key = key; ex.setAttribute('aria-label', label);
+    if (same) { morphHTML(ex, `<div class="grabber"></div>${html}`); return; }
+    ex.innerHTML = `<div class="grabber"></div>${html}`; ex.scrollTop = 0; ex.classList.remove('tall');
+    anim(ex, [{ opacity: .4 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' }); return; }
   lastFocus = document.activeElement;
   $('#sheet-root').innerHTML = `<div class="scrim" data-close="1"></div><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(label)}" data-key="${esc(key)}"><div class="grabber"></div>${html}</div>`;
   document.body.style.overflow = 'hidden'; document.body.classList.add('sheet-open');
@@ -668,19 +760,23 @@ function enableDrag(sheet) {
   sheet.addEventListener('pointerdown', e => { if (DESKTOP() || !e.target.closest('.grabber, .sheet-top') || e.target.closest('button')) return; y0 = e.clientY; t0 = performance.now(); dy = 0; sheet.setPointerCapture(e.pointerId); });
   sheet.addEventListener('pointermove', e => { if (y0 === null) return; dy = Math.max(0, e.clientY - y0); sheet.style.transform = `translateY(${dy}px)`; const s = $('#sheet-root .scrim'); if (s) s.style.opacity = String(Math.max(0, 1 - dy / 500)); });
   const end = async () => { if (y0 === null) return; y0 = null; if (dy > 110 || dy / Math.max(1, performance.now() - t0) > 0.6) return closeSheet(dy);
-    await anim(sheet, [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }], { duration: 320, easing: SPRING }); sheet.style.transform = ''; const s = $('#sheet-root .scrim'); if (s) s.style.opacity = ''; };
+    await anim(sheet, [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }], { duration: 460, easing: EASE }); sheet.style.transform = ''; const s = $('#sheet-root .scrim'); if (s) s.style.opacity = ''; };
   sheet.addEventListener('pointerup', end); sheet.addEventListener('pointercancel', end);
 }
 function closeSheet(fromDy = 0) {
-  stopListening(true);
+  if (state.sheet?.kind === 'menu' || $('#sheet-root .ctx:not(.closing)')) return closeMenu();
+  if (state.sheet?.kind === 'note') { const n = noteById(state.sheet.id), body = $('#note-body')?.value; clearTimeout(noteTimer);
+    if (n && body !== undefined && body !== n.body) api.updateNote(n.id, { body });
+    if (n && !(body ?? n.body).trim()) { api.deleteNote(n.id); }
+    setTimeout(() => state.view === 'notes' && renderView(), 0); }
   state.sheet = null; document.body.style.overflow = ''; document.body.classList.remove('sheet-open');
   const root = $('#sheet-root'), sheet = root.querySelector('.sheet:not(.closing)'), scrim = root.querySelector('.scrim:not(.closing)');
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
   if (!sheet) { root.innerHTML = ''; return; }
   sheet.classList.add('closing'); scrim?.classList.add('closing');
   const done = () => { sheet.remove(); scrim?.remove(); }; if (REDUCED()) return done();
-  anim(scrim, [{ opacity: scrim ? getComputedStyle(scrim).opacity : 1 }, { opacity: 0 }], { duration: 240, easing: 'ease-out', fill: 'forwards' });
-  anim(sheet, DESKTOP() ? [{ opacity: 1, scale: 1 }, { opacity: 0, scale: .97 }] : [{ transform: `translateY(${fromDy}px)` }, { transform: 'translateY(100%)' }], { duration: DESKTOP() ? 180 : 260, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' }).then(done);
+  anim(scrim, [{ opacity: scrim ? getComputedStyle(scrim).opacity : 1 }, { opacity: 0 }], { duration: 380, easing: 'ease-out', fill: 'forwards' });
+  anim(sheet, DESKTOP() ? [{ opacity: 1, scale: 1 }, { opacity: 0, scale: .97 }] : [{ transform: `translateY(${fromDy}px)` }, { transform: 'translateY(100%)' }], { duration: DESKTOP() ? 260 : 380, easing: EASE_IN, fill: 'forwards' }).then(done);
 }
 function rerenderSheetSafe() {
   const s = state.sheet; if (!s) return;
@@ -700,9 +796,9 @@ function openItem(id) {
 }
 function openNew(preset = {}) {
   delete state.segPos.iowner;
-  const owner = state.who === 'other' ? 'other' : state.who === 'all' ? 'me' : 'me';
+  const owner = 'both';
   const date = preset.date ?? (state.view === 'today' ? today() : state.view === 'upcoming' ? addDays(today(), 1) : null);
-  state.sheet = { kind: 'item', id: null, mode: null, draft: { title: '', notes: '', owner, due_date: date, remind_at: null, phone: '', urgent: false, brand_id: null, ...preset } };
+  state.sheet = { kind: 'item', id: null, mode: null, draft: { title: '', notes: '', owner, due_date: date, remind_at: null, phone: '', type: 'task', urgent: false, brand_id: null, ...preset } };
   renderItem(); setTimeout(() => $('#f-title')?.focus(), 80);
 }
 const cur = () => state.sheet.id ? itemById(state.sheet.id) : state.sheet.draft;
@@ -718,8 +814,10 @@ function renderItem() {
     <h3 class="mini-h">Call again</h3>${chipRow('follow', [['', 'No'], [atLocal(addDays(today(), 1), 10), 'Tomorrow'], [atLocal(addDays(today(), 3), 10), 'In 3 days'], [atLocal(addDays(today(), 7), 10), 'Next week']], s.follow || '')}
     <div class="btnrow tight"><button class="btn quiet" data-mode="">Cancel</button><button class="btn solid grow" data-log-go="1">Save and complete</button></div></div>`;
   const callBar = !isNew && it.phone && isOpen(it) ? `<div class="actions${s.mode ? ' has-panel' : ''}"><a class="act primary" href="${esc(telHref(it.phone))}">${ICON.call}<span>Call ${esc(it.contact_name || '')}</span></a><button class="act" data-mode="log">${ICON.note}<span>Log call</span></button></div>${panel}` : '';
-  const fromLine = !isNew && fromOther(it) ? `<div class="from-line">${avatar(it.created_by, 22)}<span>${esc(nameOf(it.created_by))} asked you, ${esc(relTime(it.created_at))}</span></div>` : '';
-  const nudge = !isNew && isOpen(it) && ok === 'other' ? `<button class="act" data-nudge="1">${ICON.send}<span>Nudge ${esc(o)}</span></button>` : '';
+  const fromLine = '', nudge = '';
+  const msgs = isNew ? '' : `<section class="msg-card" aria-label="Messages"><div class="msg-h"><span>${ICON.chat}Messages</span><span class="lbl">${thread.filter(x => x.kind === 'comment').length || ''}</span></div>
+    <div class="thread">${thread.filter(x => x.kind === 'comment').map(x => `<div class="bubble${x.actor_id === state.me.id ? ' me' : ''}" style="--pc:${colorOf(x.actor_id)}"><span class="b-text">${esc(x.body)}</span><span class="lbl">${esc(x.actor_id === state.me.id ? 'You' : nameOf(x.actor_id))}, ${esc(relTime(x.created_at))}</span></div>`).join('') || `<p class="lbl msg-empty">Leave a note for ${esc(o)} about this.</p>`}</div>
+    <form id="comment-form" class="composer"><input id="c-in" class="input" placeholder="Message ${esc(o)}" autocomplete="off" aria-label="Message ${esc(o)}"><button class="send-btn" type="submit" aria-label="Send">${ICON.send}</button></form><div class="err" id="c-err" role="alert"></div></section>`;
   showSheet(`${top(isNew ? 'New reminder' : 'Details', isNew ? 'Cancel' : 'Done')}
     ${fromLine}
     <div class="done-row">${isNew ? '<span class="check lg ghost" aria-hidden="true"></span>' : `<button class="check lg${it.done ? ' done' : ''}${it.urgent && !it.done ? ' urgent' : ''}" data-sheet-done="1" aria-label="${it.done ? 'Mark not done' : 'Complete'}"></button>`}
@@ -727,26 +825,20 @@ function renderItem() {
     <textarea class="bare notes-input" data-ifield="notes" rows="1" placeholder="Notes" aria-label="Notes">${esc(it.notes || '')}</textarea>
     ${!isNew ? `<div class="seg status-seg" data-seg="istatus" role="radiogroup" aria-label="Status"><span class="seg-pill" aria-hidden="true"></span>${[['todo', 'Not started'], ['doing', 'In progress'], ['done', 'Done']].map(([k, l]) => `<button data-status="${k}" aria-pressed="${(it.status || (it.done ? 'done' : 'todo')) === k}">${l}</button>`).join('')}</div>` : ''}
     ${!isNew && missed(it) ? `<div class="missed-note"><span class="red">Missed ${esc(clock(it.remind_at))}.</span> Pick a new time below.</div>${snoozeSlider()}` : ''}
-    ${callBar}${nudge ? `<div class="actions">${nudge}</div>` : ''}
+    ${callBar}${msgs}
     <div class="form-card">
-      <div class="fc-row"><span class="fc-l">Who</span><div class="seg owner-seg" data-seg="iowner" role="radiogroup" aria-label="Who"><span class="seg-pill" aria-hidden="true"></span>
-        <button data-owner="me" aria-pressed="${ok === 'me'}">You</button><button data-owner="other" aria-pressed="${ok === 'other'}">${esc(o)}</button><button data-owner="both" aria-pressed="${ok === 'both'}">Both</button></div></div>
-      ${ok === 'other' && isNew ? `<p class="fc-hint">${esc(o)} gets a notification.</p>` : ''}
       <div class="fc-row col"><span class="fc-l">Date</span><div class="chips wrap">${dates.map(([v, l]) => `<button type="button" class="chip" data-date="${v}" aria-pressed="${(date || '') === v && !customDate}">${esc(l)}</button>`).join('')}
         <label class="chip datechip${customDate ? ' on' : ''}"><span>${customDate ? esc(rel(date)) : 'Pick'}</span><input type="date" data-date-input="1" value="${date || ''}" aria-label="Pick a date"></label></div></div>
       ${date ? `<div class="fc-row"><span class="fc-l stack-l" id="tm-l">Time<span class="fc-sub">${time ? 'You get a notification then' : 'Optional'}</span></span>
         <span class="tm-right">${time ? `<span class="tm-val" id="tm-val">${esc(clock(it.remind_at))}</span>` : ''}<button class="switch" role="switch" aria-labelledby="tm-l" aria-checked="${!!time}" data-timeon="1"></button></span></div>
         ${time ? `<div class="fc-row col slider-row">${timeSlider(time)}</div>` : ''}` : ''}
       ${time ? `<div class="fc-row"><span class="fc-l stack-l" id="nag-l">Keep reminding me<span class="fc-sub">Every 30 minutes until it's done</span></span><button class="switch" role="switch" aria-labelledby="nag-l" aria-checked="${!!it.nag}" data-nag="1"></button></div>` : ''}
-      <label class="fc-row"><span class="fc-l">Phone</span><input class="bare fc-in" type="tel" data-ifield="phone" value="${esc(it.phone || '')}" placeholder="Add a number to make it a call" autocomplete="tel"></label>
+      <div class="fc-row"><span class="fc-l stack-l" id="call-l">Call<span class="fc-sub">Shows in Calls, with a call button</span></span><button class="switch" role="switch" aria-labelledby="call-l" aria-checked="${isCall(it)}" data-callon="1"></button></div>
+      ${isCall(it) ? `<label class="fc-row"><span class="fc-l">Number</span><input class="bare fc-in" type="tel" data-ifield="phone" value="${esc(it.phone || '')}" placeholder="Optional" autocomplete="tel"></label>` : ''}
       <div class="fc-row"><span class="fc-l" id="urg-l">Urgent</span><button class="switch" role="switch" aria-labelledby="urg-l" aria-checked="${!!it.urgent}" data-urgent="1"></button></div>
       <div class="fc-row col"><span class="fc-l">Brand <span class="fc-sub">Optional</span></span>${chipRow('ibrand', [['', 'None'], ...state.brands.map(x => [x.id, x.name, x.color])], it.brand_id || '')}</div>
     </div>
-    ${isNew ? `<div class="err" id="c-err" role="alert"></div><button class="btn solid wide" data-save-new="1">${ok === 'other' ? `Send to ${esc(o)}` : 'Add reminder'}</button>` : `
-    <h2 class="section-h">Messages with ${esc(o)}</h2>
-    <div class="thread">${thread.map(x => x.kind === 'comment' ? `<div class="bubble${x.actor_id === state.me.id ? ' me' : ''}" style="--pc:${colorOf(x.actor_id)}"><span class="b-text">${esc(x.body)}</span><span class="lbl">${esc(nameOf(x.actor_id))}, ${esc(relTime(x.created_at))}</span></div>`
-      : `<div class="sysline">${actText(x)}${x.body ? `: "${esc(x.body)}"` : ''}<span class="lbl"> ${esc(relTime(x.created_at))}</span></div>`).join('') || '<div class="lbl">No messages yet.</div>'}</div>
-    <form id="comment-form" class="row-form"><input id="c-in" class="input" placeholder="Message ${esc(o)}" autocomplete="off" aria-label="Message"><button class="btn solid" type="submit">Send</button></form><div class="err" id="c-err" role="alert"></div>
+    ${isNew ? `<div class="err" id="c-err" role="alert"></div><button class="btn solid wide" data-save-new="1">Add reminder</button>` : `
     <div style="margin-top:28px"><button class="btn danger" data-delete="${it.id}">Delete reminder</button></div>`}`, isNew ? 'New reminder' : 'Details');
   autoGrow($('#f-title')); autoGrow($('.notes-input')); placeSegs($('#sheet-root'));
 }
@@ -754,7 +846,7 @@ async function patchCur(patch, quiet) {
   const s = state.sheet;
   if (!s.id) { Object.assign(s.draft, patch); return; }
   await api.updateItem(s.id, patch);
-  const it = itemById(s.id), t = typeFor(it, ownerKey(it), it.created_by);
+  const it = itemById(s.id), t = typeFor(it);
   if (t !== it.type) await api.updateItem(s.id, { type: t });
   if (!quiet) renderView();
 }
@@ -766,18 +858,18 @@ async function setWhen(date, time) {
 async function saveNew() {
   const s = state.sheet, d = s.draft; d.title = ($('#f-title')?.value || '').trim(); d.notes = $('.notes-input')?.value || '';
   if (!d.title) { $('#c-err').textContent = 'Give it a title first.'; return $('#f-title').focus(); }
-  const it = await api.addItem({ type: d.phone ? 'call' : d.owner === 'other' ? 'request' : 'task', title: d.title, notes: d.notes, owner_ids: idsFor(d.owner), due_date: d.due_date, remind_at: d.remind_at, phone: d.phone || null, urgent: !!d.urgent, brand_id: d.brand_id });
+  const it = await api.addItem({ type: d.phone || d.type === 'call' ? 'call' : 'task', title: d.title, notes: d.notes, owner_ids: idsFor('both'), due_date: d.due_date, remind_at: d.remind_at, phone: d.phone || null, urgent: !!d.urgent, brand_id: d.brand_id });
   closeSheet(); if (!it) return;
-  if (ownedByOther(it)) api.log(it.id, ownedByMe(it) ? 'created' : 'request', '');
+  api.log(it.id, 'created', '');
   state.flash = it.id; refresh();
   const where = whereItLives(it), here = { today: 'Today', upcoming: 'Upcoming', all: 'All' }[state.view];
-  toast(ownedByOther(it) && !ownedByMe(it) ? `Sent to ${otherName()}` : where === here || state.view === 'all' ? 'Added' : `Added to ${where}`, 'Open', () => openItem(it.id));
+  toast(where === here || state.view === 'all' ? 'Added' : `Added to ${where}`, 'Open', () => openItem(it.id));
 }
 
 /* Activity (opened from the bell) */
 function actText(a) {
   const it = itemById(a.item_id), t = `<b>${esc(it ? it.title : 'something')}</b>`, who = esc(nameOf(a.actor_id)), to = a.to_id === state.me.id ? 'you' : esc(nameOf(a.to_id));
-  return ({ request: `${who} asked ${to}: ${t}`, handoff: `${who} gave ${to} ${t}`, comment: `${who} wrote on ${t}`, created: `${who} added ${t} for both of you`, done: `${who} completed ${t}`,
+  return ({ request: `${who} asked ${to}: ${t}`, handoff: `${who} gave ${to} ${t}`, comment: `${who} wrote on ${t}`, created: `${who} added ${t}`, done: `${who} completed ${t}`,
     call_log: `${who} logged a call: ${t}`, reminder: `Reminder: ${t}` })[a.kind] || `${who} updated ${t}`;
 }
 function openActivity() { state.sheet = { kind: 'activity' }; renderActivity(); setTimeout(() => { if (state.sheet?.kind === 'activity') { const ids = sel.unread().map(a => a.id); if (ids.length) api.markRead(ids); } }, 1500); }
@@ -786,93 +878,12 @@ function renderActivity() {
   showSheet(`${top('Activity')}<div class="seg" data-seg="ascope" role="group" aria-label="Show"><span class="seg-pill" aria-hidden="true"></span><button data-ascope="mine" aria-pressed="${state.actScope === 'mine'}">For you</button><button data-ascope="all" aria-pressed="${state.actScope === 'all'}">Everything</button></div>
     <div class="group" style="margin-top:8px">${list.slice(0, 80).map(a => `<button class="arow${!a.read && a.to_id === state.me.id ? ' unread' : ''}" data-open="${a.item_id}" data-act="${a.id}">${a.actor_id ? avatar(a.actor_id, 34) : `<span class="av sys" style="width:34px;height:34px">${MARK(18)}</span>`}
       <span class="a-body"><span class="a-text">${actText(a)}</span>${a.body ? `<span class="a-quote">${esc(a.body)}</span>` : ''}<span class="lbl">${esc(relTime(a.created_at))}</span></span><span class="udot"></span></button>`).join('')
-      || `<div class="empty" style="border:0">When ${esc(otherName())} sends you something, or a reminder goes off, it shows up here.</div>`}</div>
+      || `<div class="empty" style="border:0">When ${esc(otherName())} adds or finishes something, writes you a message, or a reminder goes off, it shows up here.</div>`}</div>
     ${notifPromo()}`, 'Activity');
   placeSegs($('#sheet-root'));
 }
 const chipRow = (key, list, curV) => `<div class="chips wrap" role="radiogroup">${list.map(([v, l, color]) => `<button type="button" class="chip" data-chip="${key}" data-val="${esc(v)}" aria-pressed="${v === curV}">${color ? `<span class="dot" style="background:${esc(color)}"></span>` : ''}${esc(l)}</button>`).join('')}</div>`;
 const telHref = p => 'tel:' + String(p).replace(/[^\d+]/g, '');
-
-/* ---------- Voice ---------- */
-let rec = null;
-const SR = () => window.SpeechRecognition || window.webkitSpeechRecognition;
-function openVoice() {
-  state.sheet = { kind: 'voice', phase: SR() ? 'listen' : 'type', text: '', interim: '', listening: false, items: [], ai: false };
-  renderVoice();
-  if (state.sheet.phase === 'listen') startListening(); else setTimeout(() => $('#v-text')?.focus(), 120);
-}
-function startListening() {
-  const s = state.sheet; const Ctor = SR(); if (!Ctor || !s) return;
-  try {
-    rec = new Ctor(); rec.lang = navigator.language || 'en-US'; rec.continuous = true; rec.interimResults = true;
-    rec.onresult = e => { let fin = '', inter = ''; for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; (r.isFinal ? (fin += r[0].transcript) : (inter += r[0].transcript)); }
-      if (fin) s.text = (s.text + ' ' + fin).replace(/\s+/g, ' ').trim(); s.interim = inter; const el = $('#v-live'); if (el) el.innerHTML = `${esc(s.text)} <span class="interim">${esc(inter)}</span>`; };
-    rec.onerror = e => { if (e.error === 'no-speech' || e.error === 'aborted' || state.sheet !== s) return; s.phase = 'type'; s.listening = false;
-      s.note = e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'The mic is blocked here. Tap the mic on your keyboard instead, or allow microphone access.' : "Voice isn't available right now. Tap the mic on your keyboard instead."; renderVoice(); };
-    rec.onend = () => { if (state.sheet === s && s.phase === 'listen') { s.listening = false; s.text = (s.text + ' ' + (s.interim || '')).trim(); s.interim = ''; renderVoice(); } };
-    rec.start(); s.listening = true; if (navigator.vibrate) navigator.vibrate(8); renderVoice();
-  } catch (er) { console.warn(er); s.phase = 'type'; renderVoice(); }
-}
-function stopListening(abort) { if (rec) { try { abort ? rec.abort() : rec.stop(); } catch {} rec = null; } }
-const prefs = (() => { try { return JSON.parse(localStorage.getItem('coco.prefs') || '{}'); } catch { return {}; } })();
-const savePrefs = () => { try { localStorage.setItem('coco.prefs', JSON.stringify(prefs)); } catch {} };
-async function finishVoice() {
-  const s = state.sheet; stopListening(false);
-  const text = (s.phase === 'type' ? ($('#v-text')?.value || '') : `${s.text} ${s.interim || ''}`).trim();
-  if (!text) { s.phase = 'type'; s.note = "Didn't catch anything. Try again, or type it."; return renderVoice(); }
-  s.text = text; s.phase = 'thinking'; renderVoice();
-  const [r] = await Promise.all([understand(text), wait(REDUCED() ? 0 : 700)]);
-  if (state.sheet !== s) return;
-  s.items = r.items; s.ai = r.ai;
-  if (!prefs.checkFirst && s.items.length) return addVoiceItems(true);
-  s.phase = 'confirm'; renderVoice();
-  $$('.vc').forEach((c, i) => anim(c, [{ opacity: 0, transform: 'translateY(12px) scale(.98)' }, { opacity: 1, transform: 'none' }], { duration: 380, delay: i * 70, easing: SPRING, fill: 'backwards' }));
-}
-function renderVoice() {
-  const s = state.sheet; if (!s || s.kind !== 'voice') return;
-  const o = otherName();
-  const hint = `Try: "Remind ${o} to call the Harney rep tomorrow at 2, and I need to send David the rough cut by Friday."`;
-  let body = '';
-  if (s.phase === 'listen') body = `<div class="v-stage">${MARK(132, s.listening ? 'listening' : 'idle')}</div>
-      <p class="v-live" id="v-live" aria-live="polite">${s.text ? esc(s.text) : `<span class="interim">${s.listening ? 'Listening' : 'Paused'}</span>`}</p>
-      <p class="lbl v-hint">${esc(hint)}</p>${aiNote()}${checkToggle()}
-      <div class="v-ctrls">${s.listening ? '' : `<button class="btn quiet" data-vresume="1">${ICON.mic}<span>Keep talking</span></button>`}<button class="btn solid grow big" data-vdone="1">Done</button></div>
-      <button class="linkbtn" data-vtype="1">Type instead</button>`;
-  else if (s.phase === 'type') body = `${s.note ? `<div class="note">${esc(s.note)}</div>` : ''}<label class="sr-only" for="v-text">Your note</label>
-      <textarea id="v-text" class="input v-text" rows="4" placeholder="Tap the mic on your keyboard and talk, or type a few things at once.">${esc(s.text || '')}</textarea>
-      <p class="lbl v-hint">${esc(hint)}</p>${aiNote()}${checkToggle()}<div class="v-ctrls"><button class="btn solid grow big" data-vdone="1">${prefs.checkFirst ? 'Sort it out' : 'Add'}</button></div>`;
-  else if (s.phase === 'thinking') body = `<div class="v-stage">${MARK(132, 'thinking')}</div><p class="v-live">${esc(s.text)}</p><p class="lbl" style="text-align:center">${aiLikely() ? 'Claude is sorting this into calls, requests, and reminders…' : 'Sorting this into items…'}</p>`;
-  else {
-    const n = s.items.length;
-    body = `<p class="v-quote">"${esc(s.text)}"</p>
-      <h2 class="section-h">${n ? (s.ai ? 'Sorted by Claude. Check before adding.' : "Here's what I got") : "Couldn't find anything to add. Try again with a few more words."}</h2>
-      <div class="vcs">${s.items.map((x, i) => voiceCard(x, i)).join('')}</div>
-      ${n ? `<button class="btn solid wide" data-vadd="1">Add ${n === 1 ? 'it' : `all ${n}`}</button>` : ''}
-      <div class="v-foot"><button class="linkbtn" data-vagain="1">Start over</button>${s.ai ? '' : '<span class="lbl">Basic mode. Connect AI for smarter sorting (SETUP, step 8).</span>'}</div>`;
-  }
-  showSheet(`${top('Voice note', s.phase === 'confirm' ? 'Cancel' : 'Cancel')}${body}`, 'Voice note');
-  if (s.phase === 'type') setTimeout(() => $('#v-text')?.focus(), 60);
-}
-const checkToggle = () => `<div class="v-check"><span id="vc-l">Check before adding<span class="fc-sub">${prefs.checkFirst ? 'You review the cards first' : 'Adds right away, with Undo'}</span></span><button class="switch" role="switch" aria-labelledby="vc-l" aria-checked="${!!prefs.checkFirst}" data-checkfirst="1"></button></div>`;
-function voiceCard(x, i) {
-  const o = other(), who = x.owner === 'both' ? `<span class="stack">${avatar(state.me.id, 20)}${avatar(o.id, 20)}</span>Both of you` : x.owner === 'other' ? `${avatar(o.id, 20)}For ${esc(firstName(o))}` : `${avatar(state.me.id, 20)}You`;
-  const b = brand(x.brand);
-  return `<div class="vc" data-vi="${i}"><div class="vc-top"><input class="bare vc-title" data-vtitle="${i}" value="${esc(x.title)}" aria-label="Title"><button class="iconbtn sm" data-vdel="${i}" aria-label="Remove">${ICON.x}</button></div>
-    <div class="vc-meta"><button class="vpill" data-vcycle="owner" data-i="${i}" aria-label="Who: tap to change">${who}</button>
-      ${x.remind_at ? `<label class="vpill when"><span>${esc(relWhen(x.remind_at))}</span><input type="datetime-local" data-vwhen="${i}" value="${toLocalInput(x.remind_at)}"></label>`
-      : x.due_date ? `<label class="vpill when"><span>${esc(rel(x.due_date))}</span><input type="date" data-vdue="${i}" value="${x.due_date}"></label>`
-      : `<button class="vpill ghost" data-vaddtime="${i}"><span>Add a time</span></button>`}
-      ${x.phone ? `<span class="vpill flat">${ICON.call}${esc(x.phone)}</span>` : ''}${b ? `<span class="vpill flat"><span class="dot" style="background:${esc(b.color)}"></span>${esc(b.name)}</span>` : ''}${x.urgent ? '<span class="vpill flat red">Urgent</span>' : ''}</div></div>`;
-}
-async function addVoiceItems(instant) {
-  const s = state.sheet; const made = [];
-  for (const x of s.items) { if (!x.title.trim()) continue; const it = await addParsed(x); if (it) made.push(it); }
-  closeSheet(); if (!made.length) return;
-  state.flash = made[0].id; refresh();
-  const forOther = made.filter(it => ownedByOther(it) && !ownedByMe(it)).length;
-  const names = made.map(it => it.title).join(', ');
-  toast(`Added ${made.length}: ${names.length > 60 ? names.slice(0, 57) + '…' : names}${forOther ? `. ${otherName()} got ${forOther === 1 ? 'one' : forOther}.` : ''}`, 'Undo', async () => { for (const it of made) await api.deleteItem(it.id); refresh(); toast('Removed'); }, made.length === 1 ? 'Open' : null, () => openItem(made[0].id));
-}
 
 /* ---------- Settings, notifications, calendar ---------- */
 const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -909,7 +920,7 @@ function openSettings() {
     <label class="field"><span>Your name</span><input class="input" id="me-name" value="${esc(state.me.name || '')}" autocomplete="name"></label>
     <h2 class="section-h">Your color</h2><div class="swatches">${PALETTE.filter(([, c]) => c !== o.color && !state.brands.some(b => b.color.toLowerCase() === c.toLowerCase())).map(([n, c]) => `<button class="sw" data-mycolor="${c}" aria-label="${n}" aria-checked="${c === state.me.color}" role="radio" style="background:${c}"></button>`).join('')}</div>
     <h2 class="section-h">Notifications</h2>${notifPromo(true)}
-    <h2 class="section-h">Quick capture</h2><button class="calpromo" data-capture="1"><span class="calpromo-ic">${ICON.mic}</span><span><b>Jot from your Lock Screen</b><span class="lbl">Talk without unlocking. Claude sorts out the time, person, and brand.</span></span>${ICON.right}</button>
+    <h2 class="section-h">Quick capture</h2><button class="calpromo" data-capture="1"><span class="calpromo-ic">${ICON.mic}</span><span><b>Jot from your Lock Screen</b><span class="lbl">Type a note without unlocking. Claude sorts out the time and brand.</span></span>${ICON.right}</button>
     <h2 class="section-h">Calendar</h2><button class="calpromo" data-calsync="1"><span class="calpromo-ic">${ICON.calendar}</span><span><b>Calendar sync</b><span class="lbl">Calls, reminders, and due dates in Google or Apple Calendar</span></span>${ICON.right}</button>
     <h2 class="section-h">Brands</h2><div class="tile" style="padding:4px 16px">${state.brands.map(a => `<div class="acct-edit"><span class="dot lg" style="background:${esc(a.color)}"></span><input class="bare" data-brand-name="${a.id}" value="${esc(a.name)}" aria-label="Brand name"></div>`).join('')}</div>
     <form id="brand-form" class="row-form"><input id="brand-in" class="input" placeholder="Add a brand" autocomplete="off" aria-label="New brand"><button class="btn" type="submit">Add</button></form>
@@ -944,8 +955,8 @@ function openCapture() {
     <h2 class="section-h">1. Your personal link</h2>${link}
     <h2 class="section-h">2. Make the Shortcut (2 minutes)</h2>
     <ol class="steps"><li>Open the <b>Shortcuts</b> app, tap <b>+</b>, and name it <b>Coconote</b>.</li>
-      <li>Add the action <b>Dictate Text</b>. Set Stop Listening to <b>After Pause</b>.</li>
-      <li>Add <b>Get Contents of URL</b>. Paste your link. Tap the arrow, set Method to <b>POST</b>, Request Body to <b>JSON</b>, add a Text field named <b>text</b>, and set its value to <b>Dictated Text</b>.</li>
+      <li>Add the action <b>Ask for Input</b>. Set Input Type to <b>Text</b> and the prompt to <b>New reminder</b>.</li>
+      <li>Add <b>Get Contents of URL</b>. Paste your link. Tap the arrow, set Method to <b>POST</b>, Request Body to <b>JSON</b>, add a Text field named <b>text</b>, and set its value to <b>Provided Input</b>.</li>
       <li>Add <b>Show Notification</b> with <b>Contents of URL</b>, so you see what was added.</li></ol>
     <h2 class="section-h">3. Put it where your thumb is</h2>
     <ol class="steps"><li><b>Lock Screen:</b> touch and hold the Lock Screen, tap Customize, tap the flashlight or camera button, and choose Shortcut, then Coconote.</li>
@@ -987,15 +998,6 @@ function reminderToast(it) {
 
 /* ---------- Interactions ---------- */
 function go(view, transition = 'page') { state.view = view; closeSwipes(); renderView(transition); window.scrollTo(0, 0); }
-async function setOwnerCur(key) {
-  const s = state.sheet;
-  if (!s.id) { s.draft.owner = key; return renderItem(); }
-  const it = cur(), had = ownedByOther(it);
-  await api.updateItem(it.id, { owner_ids: idsFor(key) });
-  const t = typeFor(it, ownerKey(it), it.created_by); if (t !== it.type) await api.updateItem(it.id, { type: t });
-  if (!had && ownedByOther(it)) { api.log(it.id, ownedByMe(it) ? 'created' : 'request', ''); toast(`Sent to ${otherName()}`); }
-  renderView(); renderItem();
-}
 async function deleteWithUndo(id) {
   const it = itemById(id); if (!it) return; const copy = { ...it };
   const wrap = $(`[data-rowwrap="${id}"]`); if (wrap && !REDUCED()) await collapse(wrap);
@@ -1006,12 +1008,12 @@ function bind() {
   bindSwipe();
   document.addEventListener('click', async e => {
     if (suppressClick) { e.preventDefault(); e.stopPropagation(); return; }
+    if (e.target.matches?.('[data-ctxout]')) return closeSheet();
     const openRow = e.target.closest('.row.open'); if (openRow) { e.preventDefault(); closeSwipes(); return; }
     const b = e.target.closest('button, [data-close]'); if (!b) return;
     const d = b.dataset, s = state.sheet;
     if (d.close) return closeSheet();
     if (d.view) { if (d.view === 'all' && state.smart && state.view === 'all') { state.smart = null; return renderView('page'); } if (state.view === d.view) { window.scrollTo({ top: 0, behavior: REDUCED() ? 'auto' : 'smooth' }); return; } go(d.view); if (d.view === 'search') $('#search-input')?.focus(); return; }
-    if (d.who) { if (state.who === d.who) return; state.who = d.who; return renderView('filter'); }
     if (d.calopen) { state.calOpen = d.calopen === '1'; state.calMonth = null; renderView(); anim($('.cal-card .cal-grid:not(.wd)'), [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: EASE }); return; }
     if (d.calmove) { const [y, m] = (state.calMonth || today().slice(0, 7)).split('-').map(Number), n = new Date(y, m - 1 + +d.calmove, 1); state.calMonth = toISO(n).slice(0, 7); renderView(); anim($('#cal .cal-days'), [{ opacity: 0, transform: `translateX(${+d.calmove * 20}px)` }, { opacity: 1, transform: 'none' }], { duration: 240, easing: EASE }); return; }
     if (d.calday) {
@@ -1024,11 +1026,15 @@ function bind() {
     if (d.newon) return openNew({ date: d.newon });
     if ('smart' in d) { state.smart = d.smart || null; window.scrollTo(0, 0); return renderView('page'); }
     if (d.movetoday) return moveOverdueToToday();
-    if (d.mstatus) { const id = s.id; closeSheet(); return setStatus(id, d.mstatus); }
-    if (d.murgent) { const it = itemById(s.id); closeSheet(); await api.updateItem(it.id, { urgent: !it.urgent }); state.flash = it.id; return renderView(); }
-    if (d.mopen) return openItem(s.id);
-    if (d.mdelete) { const id = s.id; closeSheet(); return deleteWithUndo(id); }
-    if (d.snoozeGo && s?.id) { const st = state.snoozeStops?.[+$('#sn-range').value]; if (!st) return; const id = s.id; closeSheet(); return snoozeItem(id, st[1]); }
+    if (d.mstatus) { const id = s.id, ck = $('#ctx-card .check');
+      $$('.ctx [data-mstatus]').forEach(x => x.setAttribute('aria-checked', String(x === b)));
+      if (ck) { ck.classList.toggle('done', d.mstatus === 'done'); ck.classList.toggle('doing', d.mstatus === 'doing'); }
+      await wait(320); closeSheet(); await wait(200); return setStatus(id, d.mstatus); }
+    if (d.murgent) { const it = itemById(s.id); closeSheet(); await wait(420); await api.updateItem(it.id, { urgent: !it.urgent }); return renderView(); }
+    if (d.mopen) { const id = s.id; closeSheet(); await wait(260); return openItem(id); }
+    if (d.mdelete) { const id = s.id; closeSheet(); await wait(420); return deleteWithUndo(id); }
+    if (d.snoozeGo && s?.id) { const st = state.snoozeStops?.[+$('#sn-range').value]; if (!st) return; const id = s.id; closeSheet(); await wait(s.kind === 'menu' ? 420 : 0); return snoozeItem(id, st[1]); }
+    if (d.callon && s?.kind === 'item') { const it = cur(), on = !isCall(it); await patchCur(on ? { type: 'call' } : { type: 'task', phone: null }); renderView(); return renderItem(); }
     if (d.timeon && s?.kind === 'item') { const it = cur(), dt = dateOf(it); if (timeOf(it)) return setWhen(dt, null);
       let m = 9 * 60; if (dt === today()) { const n = new Date(); m = Math.min(TMAX, Math.max(TMIN, Math.ceil((n.getHours() * 60 + n.getMinutes() + 60) / 15) * 15)); }
       return setWhen(dt, minsTo(m)); }
@@ -1038,7 +1044,6 @@ function bind() {
     if (d.nag && s?.kind === 'item') { const it = cur(); await patchCur({ nag: !it.nag }); b.setAttribute('aria-checked', String(!!cur().nag)); return; }
     if (d.showdone) { state.showDone[d.showdone] = !state.showDone[d.showdone]; return renderView(); }
     if (d.activity) return openActivity();
-    if (d.voice) return openVoice();
     if (d.open) { if (d.act) api.markRead([d.act]); return openItem(d.open); }
     if (d.toggle) return toggleTask(d.toggle, b);
     if (d.rurgent) { const it = itemById(d.rurgent); closeSwipes(); await api.updateItem(it.id, { urgent: !it.urgent }); return renderView(); }
@@ -1046,6 +1051,10 @@ function bind() {
     if (d.ascope) { state.actScope = d.ascope; return renderActivity(); }
     if (d.settings) return openSettings();
     if (d.calsync) return openCalSync();
+    if (d.folder) { state.noteFolder = d.folder; return renderView('filter'); }
+    if (d.note) return openNote(d.note);
+    if (d.noteTask) return noteToTask();
+    if (d.noteDel) return deleteNoteUndo(state.sheet?.id);
     if (d.capture) return openCapture();
     if (d.capGet) { b.textContent = 'Making your link'; return loadCapToken(false); }
     if (d.capCopy) { const i = $('#cap-url'); try { await navigator.clipboard.writeText(i.value); } catch { i.select(); document.execCommand('copy'); } return toast('Link copied'); }
@@ -1054,16 +1063,6 @@ function bind() {
     if (d.calGet) { b.textContent = 'Making your link'; return loadCalToken(false); }
     if (d.calCopy) { const i = $('#cal-url'); try { await navigator.clipboard.writeText(i.value); } catch { i.select(); document.execCommand('copy'); } return toast('Link copied'); }
     if (d.calReset) { if (!d.armed) { b.dataset.armed = '1'; b.textContent = 'Tap again. Your current link will stop working.'; return; } return loadCalToken(true); }
-    /* voice */
-    if (d.vdone) return finishVoice();
-    if (d.vresume) return startListening();
-    if (d.vtype) { stopListening(true); s.phase = 'type'; s.text = `${s.text} ${s.interim || ''}`.trim(); return renderVoice(); }
-    if (d.vagain) { s.text = ''; s.items = []; s.phase = SR() ? 'listen' : 'type'; renderVoice(); if (s.phase === 'listen') startListening(); return; }
-    if (d.vadd) return addVoiceItems();
-    if (d.checkfirst) { prefs.checkFirst = !prefs.checkFirst; savePrefs(); return renderVoice(); }
-    if (d.vdel) { const c = b.closest('.vc'); await anim(c, [{ opacity: 1 }, { opacity: 0, transform: 'translateX(30px)' }], { duration: 200, easing: 'ease-in', fill: 'forwards' }); s.items.splice(+d.vdel, 1); return renderVoice(); }
-    if (d.vcycle) { const x = s.items[+d.i], order = ['me', 'other', 'both']; x.owner = order[(order.indexOf(x.owner) + 1) % order.length]; return renderVoice(); }
-    if (d.vaddtime) { s.items[+d.vaddtime].remind_at = atLocal(addDays(today(), 1), 9); return renderVoice(); }
     /* details */
     if ('mode' in d && s?.kind === 'item') { s.mode = d.mode || null; renderItem(); if (s.mode) $('#log-note')?.focus(); return; }
     if (d.logGo) { const it = cur(), note = ($('#log-note')?.value || '').trim();
@@ -1072,12 +1071,12 @@ function bind() {
       if (s.follow) { const f = await api.addItem({ type: 'call', title: it.title, contact_name: it.contact_name, phone: it.phone, brand_id: it.brand_id, owner_ids: it.owner_ids, due_date: dayOf(s.follow), remind_at: s.follow }); if (f) state.flash = f.id; }
       closeSheet(); refresh(); return toast(s.follow ? `Logged. Call again ${atText(s.follow)}.` : 'Call logged'); }
     if (d.nudge) { const it = cur(); await api.log(it.id, 'request', 'Friendly nudge'); return toast(`Nudged ${otherName()}`); }
-    if (d.owner && s?.kind === 'item') { $$('[data-owner]', $('#sheet-root')).forEach(x => x.setAttribute('aria-pressed', String(x === b))); placeSegs($('#sheet-root')); return setOwnerCur(d.owner); }
     if ('date' in d && s?.kind === 'item') { const it = cur(); return setWhen(d.date || null, d.date ? timeOf(it) : null); }
     if ('time' in d && s?.kind === 'item') { return setWhen(dateOf(cur()), d.time || null); }
     if (d.chip) {
       $$(`[data-chip="${d.chip}"]`).forEach(x => x.setAttribute('aria-pressed', String(x === b)));
       if (d.chip === 'ibrand') return patchCur({ brand_id: d.val || null });
+      if (d.chip === 'nfolder') { await api.updateNote(state.sheet.id, { brand_id: d.val || null }); return renderView(); }
       if (d.chip === 'follow') s.follow = d.val || null; return;
     }
     if (d.urgent && s?.kind === 'item') { const it = cur(); await patchCur({ urgent: !it.urgent }); b.setAttribute('aria-checked', String(!!cur().urgent)); return; }
@@ -1106,6 +1105,7 @@ function bind() {
   });
   document.addEventListener('input', e => {
     const el = e.target, s = state.sheet;
+    if (el.id === 'note-body' && s?.kind === 'note') return saveNoteSoon(s.id, el.value);
     if (el.id === 'sn-range') return onSnoozeInput(el);
     if (el.id === 'tm-range') return onTimeInput(el);
     if (el.id === 'qa-input') { $('#qa-err').textContent = ''; qaPreview(); }
@@ -1113,7 +1113,6 @@ function bind() {
     if (el.classList.contains('title-input') || el.classList.contains('notes-input')) autoGrow(el);
     if (el.dataset.ifield && s?.kind === 'item' && !s.id) { s.draft[el.dataset.ifield] = el.value; if (el.dataset.ifield === 'title' && $('#c-err')) $('#c-err').textContent = ''; }
     if (el.id === 'c-in') $('#c-err').textContent = '';
-    if (el.dataset.vtitle !== undefined && s?.items) s.items[+el.dataset.vtitle].title = el.value;
   });
   document.addEventListener('change', async e => {
     const el = e.target, s = state.sheet;
@@ -1127,21 +1126,17 @@ function bind() {
     if (el.dataset.dateInput) return setWhen(el.value || null, el.value ? timeOf(cur()) : null);
     if (el.dataset.timeInput) return setWhen(dateOf(cur()) || today(), el.value || null);
     if (el.id === 'tm-range' && s?.kind === 'item') return setWhen(dateOf(cur()), minsTo(+el.value));
-    if (el.dataset.vwhen !== undefined) { s.items[+el.dataset.vwhen].remind_at = el.value ? new Date(el.value).toISOString() : null; renderVoice(); }
-    if (el.dataset.vdue !== undefined) { s.items[+el.dataset.vdue].due_date = el.value || null; renderVoice(); }
     if (el.id === 'me-name') { const v = el.value.trim(); if (v) { await api.updateProfile({ name: v }); renderShell(); openSettings(); toast('Name saved'); } }
     if (el.dataset.brandName) { const v = el.value.trim(); if (v) { await api.updateBrand(el.dataset.brandName, { name: v }); renderView(); } }
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && state.sheet) return closeSheet();
-    if (e.key === 'Tab' && state.sheet) { const sh = $('#sheet-root .sheet:not(.closing)'); if (sh) { const f = $$('button, a[href], input, textarea, select', sh).filter(x => !x.disabled && x.offsetParent !== null);
+    if (e.key === 'Tab' && state.sheet) { const sh = $('#sheet-root .sheet:not(.closing), #sheet-root .ctx:not(.closing)'); if (sh) { const f = $$('button, a[href], input, textarea, select', sh).filter(x => !x.disabled && x.offsetParent !== null);
       if (f.length) { const first = f[0], last = f[f.length - 1]; if (!sh.contains(document.activeElement)) { e.preventDefault(); first.focus(); } else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); } } } }
     if (e.key === 'Enter' && e.target.id === 'f-title') { e.preventDefault(); if (state.sheet && !state.sheet.id) return saveNew(); e.target.blur(); return; }
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.target.id === 'v-text') { e.preventDefault(); return finishVoice(); }
     const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName);
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (state.sheet) closeSheet(); go('search'); return $('#search-input').focus(); }
     if (!typing && !state.sheet && e.key === 'n') { e.preventDefault(); $('#qa-input')?.focus(); }
-    if (!typing && !state.sheet && e.key === 'v') { e.preventDefault(); openVoice(); }
   });
   document.addEventListener('focusin', e => { if (e.target.id === 'qa-input') qaPreview(); });
   document.addEventListener('focusout', e => { if (e.target.id === 'qa-input') setTimeout(qaPreview, 150); });
@@ -1150,7 +1145,7 @@ function bind() {
 /* ---------- Auth ---------- */
 function renderLogin(msg = '') {
   const up = state.authMode === 'signup';
-  $('#app').innerHTML = `<main class="login"><div>${MARK(64, 'login-mark')}<h1>coconotes</h1><p class="sub">Calls, requests, and reminders for two</p></div>
+  $('#app').innerHTML = `<main class="login"><div>${MARK(64, 'login-mark')}<h1>coconotes</h1><p class="sub">Reminders and notes for two</p></div>
     <form id="auth-form" novalidate>
       ${up ? `<label class="field"><span>Your name</span><input class="input" id="a-name" autocomplete="name" placeholder="First and last name"></label>` : ''}
       <label class="field"><span>Email</span><input class="input" id="a-email" type="email" autocomplete="email" placeholder="name@company.com"></label>
@@ -1192,12 +1187,12 @@ async function start(session) {
   if (notifState() === 'granted') enablePush(true);
   let t; const reload = () => { clearTimeout(t); t = setTimeout(() => api.loadAll().then(refresh).catch(console.error), 200); };
   const ch = sb.channel('coconotes-live');
-  ['items', 'profiles', 'brands'].forEach(table => ch.on('postgres_changes', { event: '*', schema: 'public', table }, reload));
+  ['items', 'profiles', 'brands', 'notes'].forEach(table => ch.on('postgres_changes', { event: '*', schema: 'public', table }, reload));
   ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity' }, p => {
     reload(); const a = p.new; if (a?.to_id !== state.me.id || a.actor_id === state.me.id) return;
     setTimeout(() => { const it = itemById(a.item_id); if (!it) return;
       if (a.kind === 'reminder') return reminderToast(it);
-      const who = nameOf(a.actor_id), msg = { request: `${who} asked you: ${it.title}`, handoff: `${who} sent you ${it.title}`, comment: `${who}: ${a.body}`, created: `${who} added ${it.title} for you`, done: `${who} finished ${it.title}`, call_log: `${who} logged a call` }[a.kind];
+      const who = nameOf(a.actor_id), msg = { request: `${who} asked you: ${it.title}`, handoff: `${who} sent you ${it.title}`, comment: `${who}: ${a.body}`, created: `${who} added ${it.title}`, done: `${who} finished ${it.title}`, call_log: `${who} logged a call` }[a.kind];
       if (msg) toast(msg, 'Open', () => openItem(a.item_id)); }, 400);
   }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'activity' }, reload).subscribe();
   document.addEventListener('visibilitychange', () => { if (!document.hidden) reload(); });

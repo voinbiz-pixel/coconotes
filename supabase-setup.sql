@@ -82,6 +82,15 @@ create table if not exists public.capture_tokens (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.notes (
+  id uuid primary key default gen_random_uuid(),
+  body text not null default '',
+  brand_id uuid references public.brands on delete set null,
+  created_by uuid references public.profiles on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists items_owner_idx on public.items using gin (owner_ids);
 create index if not exists items_remind_idx on public.items (remind_at) where not reminded;
 create index if not exists activity_to_idx on public.activity (to_id, read);
@@ -96,6 +105,7 @@ alter table public.activity enable row level security;
 alter table public.push_subscriptions enable row level security;
 alter table public.calendar_tokens enable row level security;
 alter table public.capture_tokens enable row level security;
+alter table public.notes enable row level security;
 
 create policy "team reads team list" on public.team_members for select using (public.is_team_member());
 create policy "team reads profiles" on public.profiles for select using (public.is_team_member());
@@ -113,8 +123,9 @@ create policy "reset own calendar link" on public.calendar_tokens for delete usi
 create policy "read own capture key" on public.capture_tokens for select using (profile_id = auth.uid());
 create policy "create own capture key" on public.capture_tokens for insert with check (profile_id = auth.uid() and public.is_team_member());
 create policy "reset own capture key" on public.capture_tokens for delete using (profile_id = auth.uid());
+create policy "team manages notes" on public.notes for all using (public.is_team_member()) with check (public.is_team_member());
 
-alter publication supabase_realtime add table public.items, public.activity, public.profiles, public.brands;
+alter publication supabase_realtime add table public.items, public.activity, public.profiles, public.brands, public.notes;
 
 insert into public.brands (name, color, sort) values
   ('LOX', '#0F5C63', 0), ('Greenwich & Delancey', '#7D6230', 1), ('Chef David', '#6B4A2F', 2), ('Madison and Park', '#2F5D3A', 3);

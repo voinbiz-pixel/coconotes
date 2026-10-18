@@ -49,17 +49,11 @@ Test: set a reminder for 2 minutes from now. Your phone should buzz.
 3. Optional secret `APP_URL` with your Vercel link, so calendar entries open coconotes.
 4. In coconotes: avatar, Calendar sync, Get my calendar link.
 
-## 8. Smart voice understanding (5 minutes, recommended)
+## 8. Claude key for Lock Screen notes (2 minutes, optional)
 
-Without this, voice notes use a basic built-in parser. With it, Claude sorts messy speech into the right items.
+Lock Screen notes (step 9) use Claude to sort a typed note into reminders with the right date, time and brand. Create a key at console.anthropic.com > API Keys, set a small monthly limit, then in Supabase > Edge Functions > Secrets add `ANTHROPIC_API_KEY`. Without it, a Lock Screen note is saved as one reminder for today.
 
-1. Go to console.anthropic.com, sign up, add a payment method, and create an API key.
-2. Supabase, Edge Functions, Secrets: add `ANTHROPIC_API_KEY` with that key.
-3. Edge Functions, create a function named exactly `understand`. Paste `supabase/functions/understand/index.ts` and deploy. Leave JWT verification on, so only the two of you can use it.
-
-The key never touches the app itself. Each voice note is a small request; you can set a monthly spending limit in the Anthropic console.
-
-Command line alternative: `supabase functions deploy notify`, `supabase functions deploy understand`, `supabase functions deploy calendar --no-verify-jwt`, `supabase functions deploy capture --no-verify-jwt`
+Command line alternative: `supabase functions deploy notify`, `supabase functions deploy calendar --no-verify-jwt`, `supabase functions deploy capture --no-verify-jwt`
 
 ## 9. Lock Screen quick capture (5 minutes, recommended)
 
@@ -73,23 +67,24 @@ It uses the same `ANTHROPIC_API_KEY` from step 8 to sort your note. Without it, 
 
 ## Already set up before this update?
 
-Run `upgrade-2.sql` (in-progress status and keep-reminding) and `upgrade-3.sql` (Lock Screen capture) in the SQL Editor, once each.
+Run `upgrade-4.sql` once in the SQL Editor. It turns on Notes and puts every existing reminder on both of you. (Older upgrades: `upgrade-2.sql` and `upgrade-3.sql`, only if you set up before those existed.)
+
+Optional: paste the updated `supabase/functions/notify/index.ts` into your `notify` function and deploy, so the notification reads "Masha added a reminder."
 
 ## How coconotes works
 
-It works like Apple Reminders, built for two, with fixes for the things people complain about most in Reminders.
+A shared list for two. Every reminder belongs to both of you, and when one of you adds or finishes something, the other gets a heads-up.
 
-- **Today**: what's in progress, then overdue, then today, with timed reminders in time order. **Upcoming**: everything with a future date, day by day. A week strip at the top shows which days have something; tap **Month** to open a full calendar, and tap any day to jump to it or add something on it. **All**: everything, plus folders at the top: Calls, From Masha, Waiting on Masha, In progress, Urgent, No date, and one per brand.
-- **You, Masha, Everyone** at the top switches whose reminders you see, on every tab.
-- **Tap the circle** to complete. **Touch and hold** a reminder (or right-click on a computer) to set Not started, In progress, or Done, snooze it, mark it urgent, or delete it. A half-filled circle means in progress. **Swipe left** to mark urgent or delete.
-- **Adding**: type it the way you'd say it, tap the mic and talk, or tap + for the full form. Voice notes are added right away with Undo; turn on Check before adding in the voice sheet if you'd rather review first.
-- **Messages**: the latest message on a reminder shows right on its row, bold until you read it. Unread ones also collect in the New messages folder on All.
-- **Times**: pick Morning, Noon, Afternoon, or Evening, or an exact time. You get a notification then.
-- **Keep reminding me**: turn it on and the notification repeats every 30 minutes until it's done (up to 6 times), so one swipe doesn't make you forget.
-- **Snooze**: from the hold menu, from a missed reminder, or right from the pop-up when a reminder goes off.
-- **Overdue**: one tap on "Move to today" reschedules everything overdue, with Undo.
-- **App icon badge**: counts what's due today and overdue, not just one or the other.
-- **Top right**: search, the bell (what Masha sent you and reminders that went off), and your settings.
+- **Today**: what's in progress, then overdue, then today, with timed reminders in time order.
+- **Upcoming**: everything with a future date, under each day's name and date. A week strip on top shows busy days; tap Month for the full calendar.
+- **All**: everything, with folders on top: Calls, In progress, Urgent, No date, New messages, and one per brand.
+- **Notes**: ideas and requests, jotted fast and shared. Folders per brand. The first line of a note is its title. Any note can become a reminder in one tap.
+- **Adding**: type it the way you'd say it in the bar at the bottom: "call David tomorrow at 3", "send the menu Friday #LOX". On the Notes tab the same bar makes a note. Tap + for the full form.
+- **Calls**: anything that starts with or mentions calling someone ("call David", "give Imperial a ring") lands in Calls. In details, the Call switch turns any reminder into a call; add a number for a one-tap call button.
+- **Press and hold** a reminder: it lifts out of the list with Not started, In progress, Done, the snooze slider, Urgent, Details and Delete underneath. Swipe left for Urgent or Delete.
+- **Details**: status, messages with Masha right at the top, then date, time slider, keep reminding me, call, urgent and brand.
+- **Messages**: the latest message shows on the reminder's row, bold until read, and unread ones collect in New messages.
+- **The bell**: what Masha added, finished or wrote, and reminders that went off.
 
 ## Logo files
 

@@ -1,4 +1,4 @@
-// coconotes: Lock Screen capture. An iPhone Shortcut posts dictated text here with your personal key.
+// coconotes: Lock Screen capture. An iPhone Shortcut posts typed text here with your personal key.
 // Claude sorts it into reminders (time, person, brand), they're saved, and a short summary comes back for the notification.
 // Turn OFF JWT verification for this function (the personal key is the password). Uses ANTHROPIC_API_KEY if set.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -65,16 +65,16 @@ Deno.serve(async (req) => {
   const ids = (o: string) => o === "both" ? [me.id, other?.id].filter(Boolean) : o === "other" && other ? [other.id] : [me.id];
   const lines: string[] = [];
   for (const x of items.filter((i) => i?.title)) {
-    const owner = ["me", "other", "both"].includes(x.owner) ? x.owner : "me";
+    const owner = "both"; // duo app: every reminder belongs to both of you
     const remind = x.remind_at && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(x.remind_at) ? localToUtc(x.remind_at.slice(0, 16), tz) : null;
     const due = remind ? x.remind_at!.slice(0, 10) : (/^\d{4}-\d{2}-\d{2}$/.test(x.due_date ?? "") ? x.due_date : null);
     const brand = x.brand ? (brands ?? []).find((b) => b.name.toLowerCase() === String(x.brand).toLowerCase())?.id ?? null : null;
-    const type = x.phone || x.type === "call" ? "call" : owner === "other" ? "request" : (x.type === "reminder" ? "reminder" : "task");
+    const type = x.phone || x.type === "call" || /^\s*call\b/i.test(x.title) ? "call" : (x.type === "reminder" ? "reminder" : "task");
     const { data: it, error } = await sb.from("items").insert({ type, title: x.title, owner_ids: ids(owner), due_date: due, remind_at: remind, contact_name: x.contact_name, phone: x.phone, brand_id: brand, urgent: !!x.urgent, notes: x.notes ?? "", created_by: me.id }).select("id").single();
     if (error) { console.error(error); continue; }
-    if (owner !== "me" && other) await sb.from("activity").insert({ item_id: it.id, actor_id: me.id, to_id: other.id, kind: owner === "other" ? "request" : "created", body: "" });
+    if (other) await sb.from("activity").insert({ item_id: it.id, actor_id: me.id, to_id: other.id, kind: "created", body: "" });
     const when = remind ? new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(remind)) : due ?? "";
-    lines.push(`${x.title}${owner === "other" ? ` (for ${first(other)})` : owner === "both" ? " (both)" : ""}${when ? `, ${when}` : ""}`);
+    lines.push(`${x.title}${when ? `, ${when}` : ""}`);
   }
   return reply(lines.length ? `Added ${lines.length}: ${lines.join("; ")}` : "Couldn't add that. Try again.");
 });
