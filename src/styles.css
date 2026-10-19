@@ -946,3 +946,7 @@ body[data-section=notes]{--g1:#AEE3D6;--g2:#2F7A78;--accent:#7FD0C0}
 .hero-prog .pdots i{background:rgba(17,18,20,.2)}
 .hero-prog .pdots i.on{background:#111214}
 .hero-end{min-height:48px}
+/* status bar: invisible at rest (the glow runs up under the clock); a long, soft fade only while scrolled */
+.statusback{opacity:0;transition:opacity .4s ease;height:calc(env(safe-area-inset-top,0px) + 40px)!important;
+  background:linear-gradient(180deg,rgba(12,12,14,.94) 0%,rgba(12,12,14,.9) 45%,rgba(12,12,14,.55) 72%,rgba(12,12,14,.18) 90%,rgba(12,12,14,0) 100%)!important}
+body.scrolled .statusback{opacity:1}

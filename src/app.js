@@ -565,6 +565,7 @@ function renderView(transition) {
   const html = { today: renderToday, upcoming: renderUpcoming, all: renderAll, notes: renderNotes, search: renderSearch }[state.view]();
   if (transition === 'page' || state.lastView !== state.view || !v.firstChild) v.innerHTML = html; else morphHTML(v, html);
   state.lastView = state.view;
+  document.body.classList.toggle('scrolled', window.scrollY > 6);
   document.body.dataset.section = state.view === 'search' ? 'today' : state.view;
   const qi = $('#qa-input'); if (qi) { const ph = state.view === 'notes' ? 'New note' : 'New reminder'; if (qi.placeholder !== ph) { qi.placeholder = ph; $('label[for=qa-input]').textContent = ph; } }
   $$('[data-view]').forEach(b => { if (!b.closest('#view')) b.setAttribute('aria-current', b.dataset.view === state.view ? 'page' : 'false'); });
@@ -1244,6 +1245,9 @@ function demoTicker() {
 /* ---------- Boot ---------- */
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
 document.documentElement.dataset.theme = 'dark';
+/* the status-bar fade only appears once content scrolls under it, so the glow is seamless at rest */
+{ let ticking = false; const onScroll = () => { if (ticking) return; ticking = true; requestAnimationFrame(() => { document.body.classList.toggle('scrolled', window.scrollY > 6); ticking = false; }); };
+  window.addEventListener('scroll', onScroll, { passive: true }); }
 const checkTextSize = () => document.documentElement.classList.toggle('large-text', parseFloat(getComputedStyle(document.documentElement).fontSize) >= 21);
 checkTextSize(); addEventListener('resize', checkTextSize);
 bind();
