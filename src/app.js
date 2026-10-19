@@ -411,13 +411,16 @@ function renderToday() {
   const doneToday = doneFor().filter(it => it.completed_at && dayOf(it.completed_at) === t);
   const left = over.length + tod.length + prog.filter(it => !dateOf(it) || dateOf(it) <= t).length, who = '';
   const sub = left ? `${left} left today${who}` : doneToday.length ? 'All done for today' : `Nothing due today${who}`;
-  const total = left + doneToday.length;
+  const total = left + doneToday.length, nowISO2 = new Date().toISOString();
+  const next = [...tod.filter(it => it.remind_at && it.remind_at >= nowISO2), ...over, ...tod.filter(it => !(it.remind_at && it.remind_at >= nowISO2)), ...prog][0];
   return `<header class="ph ph-today"><div class="ph-top"><span class="ph-label">Today</span>${actions()}</div>
     <div class="date-row"><span class="date-num" aria-hidden="true">${now.getDate()}</span><span class="date-side"><b>${esc(now.toLocaleDateString('en-US', { weekday: 'long' }))}</b><span>${esc(now.toLocaleDateString('en-US', { month: 'long' }))}</span></span>
     <h1 class="sr-only">Today, ${esc(now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }))}</h1></div></header>
-    <section class="hero" aria-label="${left} left today, ${doneToday.length} done">
-      <div class="hero-top"><span class="mono">${esc(greeting())}, ${esc(firstName(state.me))}</span><span>${total ? `${doneToday.length} of ${total} done` : 'Clear day'}</span></div>
-      <div class="hero-bot"><span class="hero-big"><span class="bignum" data-count="${left}">${left}</span><span class="hero-unit">${left === 0 && doneToday.length ? 'all done' : 'left'}</span></span>${progressDots(doneToday.length, total)}</div>
+    <section class="hero${next ? ' has-next' : ''}" aria-label="${left} left today, ${doneToday.length} done">
+      <div class="hero-top"><span class="mono">${esc(greeting())}, ${esc(firstName(state.me))}</span>${total ? `<span class="hero-prog"><span class="sr-only">${doneToday.length} of ${total} done</span>${progressDots(doneToday.length, total)}</span>` : '<span>Clear day</span>'}</div>
+      ${next ? `<button class="hero-next" data-open="${next.id}" data-k="hn-${next.id}"><span class="hn-label">Up next${next.remind_at ? `, ${esc(clock(next.remind_at))}` : dateOf(next) && dateOf(next) < today() ? ', overdue' : ''}</span><span class="hn-title">${esc(next.title)}</span></button>` : ''}
+      <div class="hero-bot"><span class="hero-big"><span class="bignum" data-count="${left}">${left}</span><span class="hero-unit">${left === 0 && doneToday.length ? 'all done' : 'left'}</span></span>
+        <span class="hero-end">${next ? `<button class="hero-check" data-toggle="${next.id}" aria-label="Complete: ${esc(next.title)}">${ICON.check}</button>` : ''}</span></div>
     </section>
     ${section('In progress', prog, { inDoing: true, inToday: true }) + section('Overdue', over, { red: true, action: ['movetoday', `Move ${over.length} to today`] }) + section('Today', tod, { inToday: true }) || `<div class="empty-big">${MARK(56)}<p><b>${doneToday.length ? 'All done for today.' : 'Nothing due today.'}</b><br>Type one in the bar below.</p></div>`}
     ${doneBlock(doneToday, 'today')}`;
@@ -466,9 +469,9 @@ function smartGrid() {
   const tile = (k, label, cls = '') => `<button class="bento-t ${cls}" data-smart="${k}" data-k="t-${k}"><span class="bt-l">${label}</span><span class="bignum bt-n" data-count="${cnt(k)}">${cnt(k)}</span></button>`;
   const msgs = cnt('msgs');
   const brands = state.brands.map(b => [b, base.filter(it => it.brand_id === b.id).length]), mx = Math.max(1, ...brands.map(x => x[1]));
-  return `<div class="bento">${tile('calls', 'Calls', 'hero tall')}${tile('doing', 'In progress', 'tall')}${tile('urgent', 'Urgent')}${tile('undated', 'No date')}${msgs ? tile('msgs', 'New messages', 'wide') : ''}</div>
+  return `<div class="bento">${tile('calls', 'Calls', 'glow tall')}${tile('doing', 'In progress', 'tall')}${tile('urgent', 'Urgent')}${tile('undated', 'No date')}${msgs ? tile('msgs', 'New messages', 'wide') : ''}</div>
     ${brands.length ? `<section class="bars-card" aria-label="Open reminders by brand"><div class="bars-h"><span>By brand</span><span class="mono">Open</span></div>
-      <div class="bars">${brands.map(([b, n]) => `<button class="bar" data-smart="${b.id}" data-k="b-${b.id}" aria-label="${esc(b.name)}, ${n} open"><span class="bar-track"><span class="bar-fill" style="height:${Math.max(30, Math.round(100 * n / mx))}%"><b>${n}</b></span></span><span class="bar-l">${esc(b.name)}</span></button>`).join('')}</div></section>` : ''}`;
+      <div class="bars">${brands.map(([b, n]) => `<button class="bar" data-smart="${b.id}" data-k="b-${b.id}" aria-label="${esc(b.name)}, ${n} open"><span class="bar-track">${n ? `<span class="bar-fill" style="height:max(44px, ${Math.round(100 * n / mx)}%)"><b>${n}</b></span>` : '<span class="bar-zero">0</span>'}</span><span class="bar-l">${esc(b.name)}</span></button>`).join('')}</div></section>` : ''}`;
 }
 /* ---------- Notes: ideas and requests, jotted fast ---------- */
 const noteById = id => state.notes.find(n => n.id === id);
@@ -487,7 +490,7 @@ function renderNotes() {
   const folders = [['all', 'All', null, all.length], ...state.brands.map(b => [b.id, b.name, b.color, all.filter(n => n.brand_id === b.id).length]), ['none', 'No folder', null, all.filter(n => !n.brand_id).length]];
   if (state.notesMissing) return `${pageHead('Notes', '', 'Notes')}<div class="empty-big"><p><b>Notes need one quick setup step.</b><br>Run upgrade-4.sql in Supabase, then reopen coconotes.</p></div>`;
   return `${pageHead('Ideas &amp;<br>requests', all.length, `Notes, shared with ${esc(otherName())}`)}
-    <div class="ftiles" role="group" aria-label="Folders">${folders.map(([k, l, c, n]) => `<button class="ftile${f === k ? ' hero' : ''}" data-folder="${k}" data-k="f-${k}" aria-pressed="${f === k}"><span class="bignum ft-n" data-count="${n}">${n}</span><span class="ft-l">${c ? `<span class="dot" style="background:${esc(c)}"></span>` : ''}${esc(l)}</span></button>`).join('')}</div>
+    <div class="ftiles" role="group" aria-label="Folders">${folders.map(([k, l, c, n]) => `<button class="ftile${f === k ? ' glow' : ''}" data-folder="${k}" data-k="f-${k}" aria-pressed="${f === k}"><span class="bignum ft-n" data-count="${n}">${n}</span><span class="ft-l">${c ? `<span class="dot" style="background:${esc(c)}"></span>` : ''}${esc(l)}</span></button>`).join('')}</div>
     ${list.length ? `<div class="group lst notes-list">${list.map(noteRow).join('')}</div>` : `<div class="empty-big"><p><b>Nothing here yet.</b><br>Type an idea in the bar below and it lands ${f === 'all' || f === 'none' ? 'here' : `in ${esc(brand(f)?.name || 'this folder')}`}.</p></div>`}`;
 }
 async function newNote(body = '', open = false) {
