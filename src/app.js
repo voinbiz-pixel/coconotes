@@ -247,7 +247,7 @@ function updateBadge() {
 }
 
 /* ---------- Brand mark ---------- */
-const MARK = (size = 28, cls = '') => `<svg class="mark ${cls}" width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round"><path class="arc-o" d="M76.01 26.58A35 35 0 1 0 76.01 73.42"/><path class="arc-i" d="M63.38 37.96A18 18 0 1 0 63.38 62.04"/></g><circle class="arc-d" cx="50" cy="50" r="6" fill="currentColor"/></svg>`;
+const MARK = (size = 28, cls = '') => `<svg class="mark ${cls}" width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">${Array.from({ length: 12 }, (_, k) => `<circle cx="${(50 + 29 * Math.sin(k * Math.PI / 6)).toFixed(2)}" cy="${(50 - 29 * Math.cos(k * Math.PI / 6)).toFixed(2)}" r="5" fill="currentColor" fill-opacity="${k < 8 ? 1 : .22}"/>`).join('')}<circle class="mark-c" cx="50" cy="50" r="9.5" fill="var(--accent, #E07A5C)"/></svg>`;
 
 /* ---------- Icons ---------- */
 const svg = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
