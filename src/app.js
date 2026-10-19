@@ -412,15 +412,16 @@ function renderToday() {
   const left = over.length + tod.length + prog.filter(it => !dateOf(it) || dateOf(it) <= t).length, who = '';
   const sub = left ? `${left} left today${who}` : doneToday.length ? 'All done for today' : `Nothing due today${who}`;
   const total = left + doneToday.length, nowISO2 = new Date().toISOString();
-  const next = [...tod.filter(it => it.remind_at && it.remind_at >= nowISO2), ...over, ...tod.filter(it => !(it.remind_at && it.remind_at >= nowISO2)), ...prog][0];
+  const queue = [...new Set([...tod.filter(it => it.remind_at && it.remind_at >= nowISO2), ...over, ...tod.filter(it => !(it.remind_at && it.remind_at >= nowISO2)), ...prog])], next = queue[0];
+  const qLabel = (it, i) => i === 0 ? `Up next${it.remind_at ? `, ${clock(it.remind_at)}` : dateOf(it) && dateOf(it) < today() ? ', overdue' : ''}` : over.includes(it) ? 'Overdue' : doing(it) ? 'In progress' : it.remind_at ? `Then, ${clock(it.remind_at)}` : 'Later today';
   return `<header class="ph ph-today"><div class="ph-top"><span class="ph-label">Today</span>${actions()}</div>
     <div class="date-row"><span class="date-num" aria-hidden="true">${now.getDate()}</span><span class="date-side"><b>${esc(now.toLocaleDateString('en-US', { weekday: 'long' }))}</b><span>${esc(now.toLocaleDateString('en-US', { month: 'long' }))}</span></span>
     <h1 class="sr-only">Today, ${esc(now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }))}</h1></div></header>
     <section class="hero${next ? ' has-next' : ''}" aria-label="${left} left today, ${doneToday.length} done">
       <div class="hero-top"><span class="mono">${esc(greeting())}, ${esc(firstName(state.me))}</span>${total ? `<span class="hero-prog"><span class="sr-only">${doneToday.length} of ${total} done</span>${progressDots(doneToday.length, total)}</span>` : '<span>Clear day</span>'}</div>
-      ${next ? `<button class="hero-next" data-open="${next.id}" data-k="hn-${next.id}"><span class="hn-label">Up next${next.remind_at ? `, ${esc(clock(next.remind_at))}` : dateOf(next) && dateOf(next) < today() ? ', overdue' : ''}</span><span class="hn-title">${esc(next.title)}</span></button>` : ''}
+      ${next ? `<div class="hero-deck" data-k="deck" role="group" aria-label="Today's reminders. Swipe to browse.">${queue.map((it, i) => `<button class="hero-next" data-open="${it.id}" data-k="hn-${it.id}"><span class="hn-label"><span>${esc(qLabel(it, i))}</span>${queue.length > 1 ? `<span class="hn-pos">${i + 1}/${queue.length}</span>` : ''}</span><span class="hn-title">${esc(it.title)}</span></button>`).join('')}</div>` : ''}
       <div class="hero-bot"><span class="hero-big"><span class="bignum" data-count="${left}">${left}</span><span class="hero-unit">${left === 0 && doneToday.length ? 'all done' : 'left'}</span></span>
-        <span class="hero-end">${next ? `<button class="hero-check" data-toggle="${next.id}" aria-label="Complete: ${esc(next.title)}">${ICON.check}</button>` : ''}</span></div>
+        <span class="hero-end">${next ? `<button class="hero-check" data-toggle="${next.id}" aria-label="Complete: ${esc(next.title)}"><span class="hc-ic">${ICON.check}</span><span class="hc-l">Confirm</span></button>` : ''}</span></div>
     </section>
     ${section('In progress', prog, { inDoing: true, inToday: true }) + section('Overdue', over, { red: true, action: ['movetoday', `Move ${over.length} to today`] }) + section('Today', tod, { inToday: true }) || `<div class="empty-big">${MARK(56)}<p><b>${doneToday.length ? 'All done for today.' : 'Nothing due today.'}</b><br>Type one in the bar below.</p></div>`}
     ${doneBlock(doneToday, 'today')}`;
@@ -572,10 +573,24 @@ function renderView(transition) {
   if (state.view === 'today' && !state.introPlayed) { state.introPlayed = true; if (!REDUCED()) { v.classList.add('intro'); setTimeout(() => v.classList.remove('intro'), 1500); } }
   else if (transition === 'page') [...v.children].slice(0, 8).forEach((el, i) => anim(el, [{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }], { duration: 560, delay: i * 55, easing: EASE, fill: 'backwards' }));
   else if (transition === 'filter') $$('.group', v).forEach((g, i) => anim(g, [{ opacity: .35 }, { opacity: 1 }], { duration: 320, delay: Math.min(i, 6) * 30, easing: EASE }));
-  placeSegs(v); updateBadge(); countUp(v, transition === 'page' || !state.counted);
+  placeSegs(v); updateBadge(); countUp(v, transition === 'page' || !state.counted); syncHero();
   state.counted = true;
   state.flash = null;
 }
+/* Today block: the check follows the card you've swiped to, and asks for a second tap */
+let heroTimer = null;
+function syncHero() {
+  const deck = $('.hero-deck'), btn = $('.hero-check'); if (!deck || !btn) return;
+  const slides = deck.querySelectorAll('.hero-next'), i = Math.max(0, Math.min(slides.length - 1, Math.round(deck.scrollLeft / Math.max(1, deck.clientWidth)))), s = slides[i]; if (!s) return;
+  if (btn.dataset.toggle !== s.dataset.open) { btn.dataset.toggle = s.dataset.open; disarmHeroCheck(btn); }
+  btn.setAttribute('aria-label', `${btn.classList.contains('armed') ? 'Tap again to complete' : 'Complete'}: ${s.querySelector('.hn-title')?.textContent || ''}`);
+}
+function armHeroCheck(b) {
+  clearTimeout(heroTimer); b.classList.add('armed'); b.dataset.armedAt = performance.now(); if (navigator.vibrate) navigator.vibrate(8);
+  b.setAttribute('aria-label', `Tap again to complete: ${$('.hero-deck .hero-next[data-open="' + b.dataset.toggle + '"] .hn-title')?.textContent || ''}`);
+  heroTimer = setTimeout(() => disarmHeroCheck(b), 3500);
+}
+function disarmHeroCheck(b) { clearTimeout(heroTimer); if (!b) return; b.classList.remove('armed'); }
 /* big numbers glide to their new value instead of jumping */
 const countVals = new WeakMap();
 function countUp(root, fromZero) {
@@ -1014,14 +1029,51 @@ async function loadCalToken(reset) {
 let toastTimer;
 function toast(msg, action, fn, action2, fn2) {
   const el = $('#toast'); if (!el) return;
-  clearTimeout(toastTimer); el.getAnimations?.().forEach(a => a.cancel());
-  el.innerHTML = `<span>${esc(msg)}</span>${action ? `<button data-t="1">${esc(action)}</button>` : ''}${action2 ? `<button data-t="2">${esc(action2)}</button>` : ''}`;
-  el.style.animation = 'none'; el.offsetWidth; el.style.animation = '';
-  if (action) el.querySelector('[data-t="1"]').onclick = () => { el.innerHTML = ''; fn(); };
-  if (action2) el.querySelector('[data-t="2"]').onclick = () => { el.innerHTML = ''; fn2(); };
-  const hide = async () => { await anim(el, [{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' }); el.getAnimations?.().forEach(a => a.cancel()); el.innerHTML = ''; };
-  const arm = () => { clearTimeout(toastTimer); toastTimer = setTimeout(hide, action ? 8000 : 5000); };
-  el.onpointerenter = el.onfocusin = el.onpointerdown = () => clearTimeout(toastTimer); el.onpointerleave = el.onfocusout = arm; arm();
+  clearTimeout(toastTimer);
+  const replacing = el.classList.contains('show') && !el.classList.contains('leaving');
+  el.getAnimations?.().forEach(a => a.cancel()); el.classList.remove('leaving'); el.style.transform = ''; el.style.opacity = '';
+  el.innerHTML = `<span class="tb-dot" aria-hidden="true"></span><span class="tb-msg">${esc(msg)}</span>${action ? `<button class="tb-act" data-t="1">${esc(action)}</button>` : ''}${action2 ? `<button class="tb-act" data-t="2">${esc(action2)}</button>` : ''}<button class="sr-only" data-t="x">Dismiss</button>`;
+  el.classList.add('show');
+  if (replacing) anim(el, [{ transform: 'scale(.96)', opacity: .5 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: EASE });
+  else anim(el, [{ transform: 'translateX(calc(100% + 32px)) scale(.94)', opacity: 0 }, { transform: 'translateX(-8px) scale(1)', opacity: 1, offset: .68 }, { transform: 'none', opacity: 1 }], { duration: 680, easing: EASE });
+  const run = f => () => { dismissToast(); f && f(); };
+  if (action) el.querySelector('[data-t="1"]').onclick = run(fn);
+  if (action2) el.querySelector('[data-t="2"]').onclick = run(fn2);
+  el.querySelector('[data-t="x"]').onclick = () => dismissToast();
+  el.dataset.life = action ? 6500 : 4000; armToast();
+}
+function armToast() { const el = $('#toast'); clearTimeout(toastTimer); if (el?.classList.contains('show')) toastTimer = setTimeout(() => dismissToast(), +el.dataset.life || 4000); }
+function dismissToast(dir = 'right', x = 0, y = 0) {
+  const el = $('#toast'); if (!el || !el.classList.contains('show') || el.classList.contains('leaving')) return;
+  clearTimeout(toastTimer); el.classList.add('leaving');
+  const to = dir === 'up' ? `translate(${x}px, calc(-100% - 60px))` : `translate(calc(100% + 40px), ${y}px)`;
+  const finish = () => { if (!el.classList.contains('leaving')) return; el.classList.remove('show', 'leaving'); el.getAnimations?.().forEach(a => a.cancel()); el.style.transform = ''; el.style.opacity = ''; el.innerHTML = ''; };
+  if (REDUCED()) return finish();
+  anim(el, [{ transform: `translate(${x}px, ${y}px)`, opacity: el.style.opacity || 1 }, { transform: to, opacity: 0 }], { duration: 420, easing: EASE_IN, fill: 'forwards' }).then(finish);
+}
+function bindToastSwipe() {
+  let d = null;
+  document.addEventListener('pointerdown', e => {
+    const el = e.target.closest('#toast'); if (!el || e.target.closest('button') || el.classList.contains('leaving')) return;
+    d = { el, x0: e.clientX, y0: e.clientY, t0: performance.now(), dx: 0, dy: 0 }; clearTimeout(toastTimer); el.style.transition = 'none';
+    try { el.setPointerCapture(e.pointerId); } catch {}
+  });
+  document.addEventListener('pointermove', e => {
+    if (!d) return;
+    d.dx = e.clientX - d.x0; d.dy = e.clientY - d.y0;
+    const x = d.dx < 0 ? d.dx * .25 : d.dx, y = d.dy > 0 ? d.dy * .2 : d.dy;
+    d.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+    d.el.style.opacity = String(Math.max(.25, 1 - Math.max(x / 260, -y / 140, 0)));
+  });
+  const end = () => {
+    if (!d) return; const { el, dx, dy, t0 } = d; d = null;
+    const v = dx / Math.max(1, performance.now() - t0), x = dx < 0 ? dx * .25 : dx, y = dy > 0 ? dy * .2 : dy;
+    if (dx > 70 || v > .5) return dismissToast('right', x, y);
+    if (dy < -34) return dismissToast('up', x, y);
+    anim(el, [{ transform: `translate(${x}px, ${y}px)`, opacity: el.style.opacity || 1 }, { transform: 'none', opacity: 1 }], { duration: 420, easing: SPRING }).then(() => { el.style.transform = ''; el.style.opacity = ''; });
+    armToast();
+  };
+  document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
 }
 function reminderToast(it) {
   toast(`${it.nag_count ? 'Still waiting' : it.type === 'call' ? 'Time to call' : 'Reminder'}: ${it.type === 'call' && it.contact_name ? it.contact_name : it.title}`, 'Snooze', () => snoozeItem(it.id, new Date(Date.now() + 3600e3).toISOString()), 'Open', () => openItem(it.id));
@@ -1038,7 +1090,8 @@ async function deleteWithUndo(id) {
   toast('Deleted', 'Undo', async () => { const back = await api.addItem(copy); if (back) { state.flash = back.id; refresh(); } });
 }
 function bind() {
-  bindSwipe();
+  bindSwipe(); bindToastSwipe();
+  document.addEventListener('scroll', e => { if (e.target?.classList?.contains('hero-deck')) syncHero(); }, true);
   document.addEventListener('click', async e => {
     if (suppressClick) { e.preventDefault(); e.stopPropagation(); return; }
     if (e.target.matches?.('[data-ctxout]')) return closeSheet();
@@ -1078,6 +1131,11 @@ function bind() {
     if (d.showdone) { state.showDone[d.showdone] = !state.showDone[d.showdone]; return renderView(); }
     if (d.activity) return openActivity();
     if (d.open) { if (d.act) api.markRead([d.act]); return openItem(d.open); }
+    if (d.toggle && b.classList.contains('hero-check')) {
+      if (!b.classList.contains('armed')) return armHeroCheck(b);
+      if (performance.now() - (+b.dataset.armedAt || 0) < 350) return; // a fast double-tap is treated as one tap
+      disarmHeroCheck(b); return toggleTask(d.toggle, b);
+    }
     if (d.toggle) return toggleTask(d.toggle, b);
     if (d.rurgent) { const it = itemById(d.rurgent); closeSwipes(); await api.updateItem(it.id, { urgent: !it.urgent }); return renderView(); }
     if (d.rdelete) { closeSwipes(); return deleteWithUndo(d.rdelete); }
@@ -1164,6 +1222,7 @@ function bind() {
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && state.sheet) return closeSheet();
+    if (e.key === 'Escape' && $('#toast.show')) return dismissToast();
     if (e.key === 'Tab' && state.sheet) { const sh = $('#sheet-root .sheet:not(.closing), #sheet-root .ctx:not(.closing)'); if (sh) { const f = $$('button, a[href], input, textarea, select', sh).filter(x => !x.disabled && x.offsetParent !== null);
       if (f.length) { const first = f[0], last = f[f.length - 1]; if (!sh.contains(document.activeElement)) { e.preventDefault(); first.focus(); } else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); } } } }
     if (e.key === 'Enter' && e.target.id === 'f-title') { e.preventDefault(); if (state.sheet && !state.sheet.id) return saveNew(); e.target.blur(); return; }
