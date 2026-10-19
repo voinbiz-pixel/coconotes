@@ -362,13 +362,15 @@ const doneFor = () => state.items.filter(it => visible(it) && !isOpen(it) && mat
 /* ---------- Row ---------- */
 function row(it, opts = {}) {
   const done = !isOpen(it), d = dateOf(it), late = !done && ((d && d < today()) || (missed(it) && d === today())), b = brand(it.brand_id);
-  const tags = [], w = whenLabel(it, opts.inToday, opts.inDay);
+  const tags = [], showBig = (opts.inToday || opts.inDay) && it.remind_at && !it.phone && !done && dateOf(it) >= today() && !missed(it);
+  const w = showBig ? '' : whenLabel(it, opts.inToday, opts.inDay);
   if (doing(it) && !opts.inDoing) tags.push('<span class="st-doing">In progress</span>');
   if (w) tags.push(`<span class="${late ? 'red' : ''}">${esc(w)}</span>`);
   if (isCall(it) && !it.phone) tags.unshift(`<span class="calltag">${ICON.call}Call</span>`);
   if (b) tags.push(`<span class="acct"><span class="dot" style="background:${esc(b.color)}"></span>${esc(b.name)}</span>`);
   const notes = (it.notes || '').split('\n')[0].trim();
-  const acc = it.phone && !done ? `<a class="dial sm" href="${esc(telHref(it.phone))}" aria-label="Call ${esc(it.contact_name || it.phone)}">${ICON.call}</a>` : '';
+  const bt = showBig ? bigTime(it.remind_at) : null;
+  const acc = it.phone && !done ? `<a class="dial sm" href="${esc(telHref(it.phone))}" aria-label="Call ${esc(it.contact_name || it.phone)}">${ICON.call}</a>` : bt ? `<span class="rtime" aria-label="at ${esc(clock(it.remind_at))}"><b>${esc(bt[0])}</b><small>${esc(bt[1])}</small></span>` : '';
   return `<div class="row-wrap" data-rowwrap="${it.id}"><div class="row-actions" aria-hidden="true"><button class="ra ra-flag" data-rurgent="${it.id}" tabindex="-1">${ICON.flag}<span>${it.urgent ? 'Not urgent' : 'Urgent'}</span></button><button class="ra ra-del" data-rdelete="${it.id}" tabindex="-1">${ICON.trash}<span>Delete</span></button></div>
     <div class="row${done ? ' is-done' : ''}${state.flash === it.id ? ' enter' : ''}" data-swipe="${it.id}">
     <button class="check${it.urgent && !done ? ' urgent' : ''}${done ? ' done' : ''}${doing(it) ? ' doing' : ''}" data-toggle="${it.id}" aria-label="${done ? 'Mark not done' : 'Complete'}: ${esc(it.title)}${doing(it) ? ', in progress' : ''}"></button>
@@ -380,13 +382,19 @@ function msgLine(it) {
   const unread = unreadMsg(it);
   return `<span class="row-msg${unread ? ' new' : ''}" style="--pc:${colorOf(m.actor_id)}"><span class="rm-ic">${ICON.chat}</span><b>${esc(m.actor_id === state.me.id ? 'You' : nameOf(m.actor_id))}</b><span class="rm-t">${esc(m.body)}</span>${unread ? '<span class="sr-only">, unread</span>' : ''}</span>`;
 }
-const section = (title, list, opts = {}) => list.length ? `<section class="sec${opts.id && state.calDay === opts.id.slice(4) ? ' sel' : ''}"${opts.id ? ` id="${opts.id}"` : ''}><h2 class="sec-h${opts.red ? ' red' : ''}"><span>${title}</span><span class="sec-n">${list.length}</span>${opts.action ? `<button class="gh-act" data-${opts.action[0]}="1">${esc(opts.action[1])}</button>` : ''}</h2><div class="group lst">${list.map(it => row(it, opts)).join('')}</div></section>` : '';
+const section = (title, list, opts = {}) => list.length ? `<section class="sec${opts.inDay ? ' day' : ''}${opts.id && state.calDay === opts.id.slice(4) ? ' sel' : ''}"${opts.id ? ` id="${opts.id}"` : ''} data-k="s-${opts.id || title}"><h2 class="sec-h${opts.red ? ' red' : ''}"><span class="sec-t">${title}</span><span class="sec-n">${list.length}</span>${opts.action ? `<button class="gh-act" data-${opts.action[0]}="1">${esc(opts.action[1])}</button>` : ''}</h2><div class="group lst">${list.map(it => row(it, opts)).join('')}</div></section>` : '';
 function actions() {
   return `<div class="page-actions"><button class="iconbtn" data-view="search" aria-label="Search">${ICON.search}</button>
     <button class="iconbtn bellbtn" data-activity="1" aria-label="Activity">${ICON.activity}<span class="badge" hidden></span></button>
     <button class="avatar-btn" data-settings="1" aria-label="Your settings">${avatar(state.me.id, 32)}</button></div>`;
 }
-const pageHead = (title, sub = '', eyebrow = '') => `<header class="ph"><div class="ph-top"><span class="ph-eyebrow">${eyebrow}</span>${actions()}</div><h1 class="ph-title">${title}</h1>${sub ? `<p class="ph-sub">${sub}</p>` : ''}</header>`;
+const pageHead = (title, count = '', label = '') => `<header class="ph"><div class="ph-top"><span class="ph-label">${label}</span>${actions()}</div>
+  <div class="ph-row"><h1 class="ph-title">${title}</h1>${count !== '' ? `<span class="bignum ph-count" data-count="${count}" aria-label="${count} open">${count}</span>` : ''}</div></header>`;
+const bigTime = ts => { const c = clock(ts), m = c.match(/^(.*?)\s*(AM|PM)$/i); return m ? [m[1], m[2]] : [c, '']; };
+function progressDots(done, total) {
+  const n = Math.max(1, Math.min(total, 10)), on = total ? Math.round(done / total * n) : 0;
+  return `<span class="pdots" style="--n:${n}" aria-hidden="true">${Array.from({ length: n }, (_, i) => `<i class="${i < on ? 'on' : ''}"></i>`).join('')}</span>`;
+}
 function whoSeg() { return ''; }
 function doneBlock(list, key) {
   if (!list.length) return '';
@@ -403,19 +411,25 @@ function renderToday() {
   const doneToday = doneFor().filter(it => it.completed_at && dayOf(it.completed_at) === t);
   const left = over.length + tod.length + prog.filter(it => !dateOf(it) || dateOf(it) <= t).length, who = '';
   const sub = left ? `${left} left today${who}` : doneToday.length ? 'All done for today' : `Nothing due today${who}`;
-  return `${pageHead('Today', `${greeting()}, ${esc(firstName(state.me))}. ${esc(sub)}.`, esc(now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })))}
-    ${whoSeg()}
+  const total = left + doneToday.length;
+  return `<header class="ph ph-today"><div class="ph-top"><span class="ph-label">Today</span>${actions()}</div>
+    <div class="date-row"><span class="date-num" aria-hidden="true">${now.getDate()}</span><span class="date-side"><b>${esc(now.toLocaleDateString('en-US', { weekday: 'long' }))}</b><span>${esc(now.toLocaleDateString('en-US', { month: 'long' }))}</span></span>
+    <h1 class="sr-only">Today, ${esc(now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }))}</h1></div></header>
+    <section class="hero" aria-label="${left} left today, ${doneToday.length} done">
+      <div class="hero-top"><span class="mono">${esc(greeting())}, ${esc(firstName(state.me))}</span><span>${total ? `${doneToday.length} of ${total} done` : 'Clear day'}</span></div>
+      <div class="hero-bot"><span class="hero-big"><span class="bignum" data-count="${left}">${left}</span><span class="hero-unit">${left === 0 && doneToday.length ? 'all done' : 'left'}</span></span>${progressDots(doneToday.length, total)}</div>
+    </section>
     ${section('In progress', prog, { inDoing: true, inToday: true }) + section('Overdue', over, { red: true, action: ['movetoday', `Move ${over.length} to today`] }) + section('Today', tod, { inToday: true }) || `<div class="empty-big">${MARK(56)}<p><b>${doneToday.length ? 'All done for today.' : 'Nothing due today.'}</b><br>Type one in the bar below.</p></div>`}
     ${doneBlock(doneToday, 'today')}`;
 }
-function dayHeader(d) { const n = diffDays(today(), d); const main = n === 1 ? 'Tomorrow' : n < 7 ? fmtDate(d, { weekday: 'long' }) : fmtDate(d, { weekday: 'long' });
-  const sub = n === 1 ? fmtDate(d, { weekday: 'long', month: 'short', day: 'numeric' }) : fmtDate(d, { month: 'long', day: 'numeric' });
-  return `${esc(main)}</span><span class="sec-date">${esc(sub)}`; }
+function dayHeader(d) { const n = diffDays(today(), d); const main = n === 1 ? 'Tomorrow' : fmtDate(d, { weekday: 'long' });
+  const sub = n === 1 ? fmtDate(d, { weekday: 'short', month: 'short', day: 'numeric' }) : fmtDate(d, { month: 'short', day: 'numeric' });
+  return `<span class="day-main">${esc(main)}</span><span class="sec-date">${esc(sub)}</span>`; }
 function calendarBlock() {
   const t = today(), items = state.items.filter(it => visible(it) && isOpen(it) && matchWho(it) && dateOf(it));
   const byDay = {}; items.forEach(it => { const d = dateOf(it) < t ? t : dateOf(it); (byDay[d] = byDay[d] || []).push(it); });
-  const dots = d => (byDay[d] || []).slice(0, 3).map(it => `<i style="--c:${esc(brand(it.brand_id)?.color || 'var(--ink)')}"></i>`).join('');
-  const cell = (d, cls = '') => `<button class="cd${d === t ? ' is-today' : ''}${d === state.calDay ? ' is-sel' : ''}${d < t ? ' past' : ''} ${cls}" data-calday="${d}" aria-label="${esc(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))}, ${(byDay[d] || []).length} reminders">
+  const dots = d => '';
+  const cell = (d, cls = '') => `<button class="cd${d === t ? ' is-today' : ''}${d === state.calDay ? ' is-sel' : ''}${d < t ? ' past' : ''}${(byDay[d] || []).length ? ' has' : ''} ${cls}" data-calday="${d}" aria-label="${esc(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))}, ${(byDay[d] || []).length} reminders">
     <span class="cd-n">${+d.slice(8)}</span><span class="cd-dots">${dots(d)}</span></button>`;
   if (!state.calOpen) {
     const start = addDays(t, -((new Date().getDay() + 6) % 7)), week = Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -432,7 +446,7 @@ function renderUpcoming() {
   const t = today(), list = openFor().filter(it => dateOf(it) && dateOf(it) > t).sort(byWhen);
   const days = [...new Set(list.map(dateOf))];
   const sd = state.calDay, sdEmpty = sd && sd > t && !days.includes(sd);
-  return `${pageHead('Upcoming', list.length ? `${list.length} scheduled` : '')}${whoSeg()}${calendarBlock()}
+  return `${pageHead('Upcoming', list.length, 'Scheduled')}${calendarBlock()}
     ${sdEmpty ? `<div class="day-empty"><span>Nothing on ${esc(fmtDate(sd, { weekday: 'long', month: 'short', day: 'numeric' }))}.</span><button class="chip" data-newon="${sd}">${ICON.plus}Add one</button></div>` : ''}
     ${days.map(d => section(dayHeader(d), list.filter(it => dateOf(it) === d), { inDay: true, id: `day-${d}` })).join('') || '<div class="empty-big"><p><b>Nothing scheduled.</b><br>Anything with a future date shows up here.</p></div>'}`;
 }
@@ -441,18 +455,20 @@ function renderAll() {
   const dated = rest.filter(it => dateOf(it)).sort(byWhen), none = rest.filter(it => !dateOf(it)).sort((a, b) => (b.urgent - a.urgent) || a.created_at.localeCompare(b.created_at));
   const over = dated.filter(it => dateOf(it) < t);
   const done = doneFor().filter(it => !state.smart || smartTest(state.smart)(it));
-  return `${pageHead(state.smart ? `<button class="backbtn" data-smart="" aria-label="Back to All">${ICON.left}</button>${esc(smartLabel(state.smart))}` : 'All', `${list.length} open`)}${whoSeg()}
+  return `${pageHead(state.smart ? `<button class="backbtn" data-smart="" aria-label="Back to All">${ICON.left}</button>${esc(smartLabel(state.smart))}` : 'Everything<br>open', list.length, state.smart ? 'Folder' : 'All')}
     ${state.smart ? '' : smartGrid()}
     ${section('In progress', prog, { inDoing: true }) + section('Overdue', over, { red: true, action: ['movetoday', `Move ${over.length} to today`] }) + section('Today', dated.filter(it => dateOf(it) === t), { inToday: true }) + section('Scheduled', dated.filter(it => dateOf(it) > t)) + section('No date', none)
-      || `<div class="empty-big"><p><b>${state.smart ? 'Nothing here.' : 'All clear.'}</b><br>Add a reminder below, or tap the mic.</p></div>`}
+      || `<div class="empty-big"><p><b>${state.smart ? 'Nothing here.' : 'All clear.'}</b><br>Type a reminder in the bar below.</p></div>`}
     ${doneBlock(done, 'all')}`;
 }
 function smartGrid() {
-  const base = state.items.filter(it => visible(it) && isOpen(it) && matchWho(it));
-  const tiles = SMART.map(([k, , ic, test]) => [k, smartLabel(k), ic, base.filter(test).length]).filter(([k, , , n]) => n || ['calls', 'doing'].includes(k));
-  const brands = state.brands.map(b => [b, base.filter(it => it.brand_id === b.id).length]).filter(([, n]) => n);
-  return `<div class="smart">${tiles.filter(([k, , , n]) => k !== 'msgs' || n).map(([k, l, ic, n]) => `<button class="smart-tile" data-smart="${k}"><span class="st-ic ${k}">${ic === 'half' ? '<span class="half-ic"></span>' : ICON[ic]}</span><span class="st-n">${n}</span><span class="st-l">${esc(l)}</span></button>`).join('')}</div>
-    ${brands.length ? `<div class="chips brands-row">${brands.map(([b, n]) => `<button class="chip" data-smart="${b.id}"><span class="dot" style="background:${esc(b.color)}"></span>${esc(b.name)}<span class="cnt">${n}</span></button>`).join('')}</div>` : ''}`;
+  const base = state.items.filter(it => visible(it) && isOpen(it) && matchWho(it)), cnt = k => base.filter(SMART.find(x => x[0] === k)[3]).length;
+  const tile = (k, label, cls = '') => `<button class="bento-t ${cls}" data-smart="${k}" data-k="t-${k}"><span class="bt-l">${label}</span><span class="bignum bt-n" data-count="${cnt(k)}">${cnt(k)}</span></button>`;
+  const msgs = cnt('msgs');
+  const brands = state.brands.map(b => [b, base.filter(it => it.brand_id === b.id).length]), mx = Math.max(1, ...brands.map(x => x[1]));
+  return `<div class="bento">${tile('calls', 'Calls', 'hero tall')}${tile('doing', 'In progress', 'tall')}${tile('urgent', 'Urgent')}${tile('undated', 'No date')}${msgs ? tile('msgs', 'New messages', 'wide') : ''}</div>
+    ${brands.length ? `<section class="bars-card" aria-label="Open reminders by brand"><div class="bars-h"><span>By brand</span><span class="mono">Open</span></div>
+      <div class="bars">${brands.map(([b, n]) => `<button class="bar" data-smart="${b.id}" data-k="b-${b.id}" aria-label="${esc(b.name)}, ${n} open"><span class="bar-track"><span class="bar-fill" style="height:${Math.max(30, Math.round(100 * n / mx))}%"><b>${n}</b></span></span><span class="bar-l">${esc(b.name)}</span></button>`).join('')}</div></section>` : ''}`;
 }
 /* ---------- Notes: ideas and requests, jotted fast ---------- */
 const noteById = id => state.notes.find(n => n.id === id);
@@ -469,9 +485,9 @@ function renderNotes() {
   const f = state.noteFolder || 'all', all = state.notes.slice().sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const inF = n => f === 'all' ? true : f === 'none' ? !n.brand_id : n.brand_id === f, list = all.filter(inF);
   const folders = [['all', 'All', null, all.length], ...state.brands.map(b => [b.id, b.name, b.color, all.filter(n => n.brand_id === b.id).length]), ['none', 'No folder', null, all.filter(n => !n.brand_id).length]];
-  if (state.notesMissing) return `${pageHead('Notes')}<div class="empty-big"><p><b>Notes need one quick setup step.</b><br>Run upgrade-4.sql in Supabase, then reopen coconotes.</p></div>`;
-  return `${pageHead('Notes', all.length ? `${all.length} ${all.length === 1 ? 'note' : 'notes'}, shared with ${esc(otherName())}` : `Ideas and requests, shared with ${esc(otherName())}`)}
-    <div class="folders" role="group" aria-label="Folders">${folders.map(([k, l, c, n]) => `<button class="folder" data-folder="${k}" data-k="f-${k}" aria-pressed="${f === k}">${c ? `<span class="dot" style="background:${esc(c)}"></span>` : ''}<span>${esc(l)}</span><span class="cnt">${n}</span></button>`).join('')}</div>
+  if (state.notesMissing) return `${pageHead('Notes', '', 'Notes')}<div class="empty-big"><p><b>Notes need one quick setup step.</b><br>Run upgrade-4.sql in Supabase, then reopen coconotes.</p></div>`;
+  return `${pageHead('Ideas &amp;<br>requests', all.length, `Notes, shared with ${esc(otherName())}`)}
+    <div class="ftiles" role="group" aria-label="Folders">${folders.map(([k, l, c, n]) => `<button class="ftile${f === k ? ' hero' : ''}" data-folder="${k}" data-k="f-${k}" aria-pressed="${f === k}"><span class="bignum ft-n" data-count="${n}">${n}</span><span class="ft-l">${c ? `<span class="dot" style="background:${esc(c)}"></span>` : ''}${esc(l)}</span></button>`).join('')}</div>
     ${list.length ? `<div class="group lst notes-list">${list.map(noteRow).join('')}</div>` : `<div class="empty-big"><p><b>Nothing here yet.</b><br>Type an idea in the bar below and it lands ${f === 'all' || f === 'none' ? 'here' : `in ${esc(brand(f)?.name || 'this folder')}`}.</p></div>`}`;
 }
 async function newNote(body = '', open = false) {
@@ -510,7 +526,7 @@ function searchResults() {
   return `${its.length ? `<section class="sec"><h2 class="sec-h"><span>Reminders</span><span class="sec-n">${its.length}</span></h2><div class="group lst">${its.map(it => row(it)).join('')}</div></section>` : ''}
     ${ns.length ? `<section class="sec"><h2 class="sec-h"><span>Notes</span><span class="sec-n">${ns.length}</span></h2><div class="group lst notes-list">${ns.map(noteRow).join('')}</div></section>` : ''}`;
 }
-function renderSearch() { return `${pageHead('Search')}<label class="sr-only" for="search-input">Search</label><input id="search-input" class="input" type="search" placeholder="Imperial, tea, David" value="${esc(state.search)}" autocomplete="off"><div id="search-results">${searchResults()}</div>`; }
+function renderSearch() { return `${pageHead('Search', '', 'Reminders and notes')}<label class="sr-only" for="search-input">Search</label><input id="search-input" class="input" type="search" placeholder="Imperial, tea, David" value="${esc(state.search)}" autocomplete="off"><div id="search-results">${searchResults()}</div>`; }
 
 const keyOf = n => n.nodeType === 1 ? (n.id || n.getAttribute('data-k') || n.getAttribute('data-rowwrap') || n.getAttribute('data-note') || null) : null;
 function morphAttrs(a, b) {
@@ -546,13 +562,26 @@ function renderView(transition) {
   const html = { today: renderToday, upcoming: renderUpcoming, all: renderAll, notes: renderNotes, search: renderSearch }[state.view]();
   if (transition === 'page' || state.lastView !== state.view || !v.firstChild) v.innerHTML = html; else morphHTML(v, html);
   state.lastView = state.view;
+  document.body.dataset.section = state.view === 'search' ? 'today' : state.view;
   const qi = $('#qa-input'); if (qi) { const ph = state.view === 'notes' ? 'New note' : 'New reminder'; if (qi.placeholder !== ph) { qi.placeholder = ph; $('label[for=qa-input]').textContent = ph; } }
   $$('[data-view]').forEach(b => { if (!b.closest('#view')) b.setAttribute('aria-current', b.dataset.view === state.view ? 'page' : 'false'); });
   if (state.view === 'today' && !state.introPlayed) { state.introPlayed = true; if (!REDUCED()) { v.classList.add('intro'); setTimeout(() => v.classList.remove('intro'), 1500); } }
-  else if (transition === 'page') anim(v, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: EASE });
+  else if (transition === 'page') [...v.children].slice(0, 8).forEach((el, i) => anim(el, [{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }], { duration: 560, delay: i * 55, easing: EASE, fill: 'backwards' }));
   else if (transition === 'filter') $$('.group', v).forEach((g, i) => anim(g, [{ opacity: .35 }, { opacity: 1 }], { duration: 320, delay: Math.min(i, 6) * 30, easing: EASE }));
-  placeSegs(v); updateBadge();
+  placeSegs(v); updateBadge(); countUp(v, transition === 'page' || !state.counted);
+  state.counted = true;
   state.flash = null;
+}
+/* big numbers glide to their new value instead of jumping */
+const countVals = new WeakMap();
+function countUp(root, fromZero) {
+  $$('.bignum[data-count]', root).forEach(el => {
+    const to = +el.dataset.count, from = countVals.has(el) ? countVals.get(el) : (fromZero ? 0 : to); countVals.set(el, to);
+    if (from === to || REDUCED() || isNaN(to)) { el.textContent = to; return; }
+    const t0 = performance.now(), dur = Math.min(900, 380 + Math.abs(to - from) * 60);
+    const step = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 4); el.textContent = Math.round(from + (to - from) * e); if (k < 1 && countVals.get(el) === to) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
 }
 const placedPills = new WeakSet();
 function placeSegs(root = document, instant) {
@@ -570,7 +599,7 @@ function refresh() { renderView(); if (state.sheet) rerenderSheetSafe(); }
 
 /* ---------- Shell ---------- */
 function renderShell() {
-  $('#app').innerHTML = `<div class="statusback" aria-hidden="true"></div><div class="shell">
+  $('#app').innerHTML = `<div class="ambient" aria-hidden="true"></div><div class="statusback" aria-hidden="true"></div><div class="shell">
     <header class="topbar"><span class="sr-only">coconotes</span>
       <nav class="topnav" aria-label="Main">${VIEWS.map(([k, l]) => `<button data-view="${k}">${l}</button>`).join('')}</nav>
       <span class="top-right">${DEMO ? '<span class="demo-badge">Demo</span>' : ''}${actions()}</span></header>
@@ -1051,7 +1080,7 @@ function bind() {
     if (d.ascope) { state.actScope = d.ascope; return renderActivity(); }
     if (d.settings) return openSettings();
     if (d.calsync) return openCalSync();
-    if (d.folder) { state.noteFolder = d.folder; return renderView('filter'); }
+    if (d.folder) { if (state.noteFolder === d.folder) return; state.noteFolder = d.folder; return renderView('filter'); }
     if (d.note) return openNote(d.note);
     if (d.noteTask) return noteToTask();
     if (d.noteDel) return deleteNoteUndo(state.sheet?.id);
@@ -1211,6 +1240,7 @@ function demoTicker() {
 
 /* ---------- Boot ---------- */
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
+document.documentElement.dataset.theme = 'dark';
 const checkTextSize = () => document.documentElement.classList.toggle('large-text', parseFloat(getComputedStyle(document.documentElement).fontSize) >= 21);
 checkTextSize(); addEventListener('resize', checkTextSize);
 bind();
