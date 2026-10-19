@@ -979,3 +979,5 @@ body.scrolled .statusback{opacity:1}
 .hero-check,.hero-check.armed{border-radius:14px}
 /* iPhone paints its own status bar in #0C0C0E. The glow now starts in that exact color at the top edge and brightens gradually, so the bar and the app meet with no seam */
 .ambient{-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,0) 0px,rgba(0,0,0,.18) 36px,rgba(0,0,0,.5) 80px,rgba(0,0,0,.84) 128px,#000 172px);mask-image:linear-gradient(180deg,rgba(0,0,0,0) 0px,rgba(0,0,0,.18) 36px,rgba(0,0,0,.5) 80px,rgba(0,0,0,.84) 128px,#000 172px)}
+/* the scroll fade sizes itself to the status bar: zero when iPhone paints its own bar, so no vignette there */
+.statusback{height:calc(env(safe-area-inset-top,0px) * 1.7)!important}
