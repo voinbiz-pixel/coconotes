@@ -82,6 +82,16 @@ function matchBrand(q) {
   const al = a => { const n = a.name.toLowerCase(); return [norm(n), ...(BRAND_ALIASES[n] || []), ...n.split(/\s+/).filter(w => w.length > 2).map(norm)]; };
   return state.brands.find(a => al(a).includes(q)) || state.brands.find(a => al(a).some(x => x.startsWith(q)));
 }
+/* brands mentioned in a normal sentence ("for Greenwich", "LOX menu", "the M&P party") file it there.
+   Only clear names count: a bare "David" or "catering" is too vague, so those still need #. */
+const BRAND_WORDS = { 'lox': ['lox'], 'greenwich & delancey': ['greenwich & delancey', 'greenwich and delancey', 'greenwich', 'delancey', 'g&d', 'g & d', 'g and d'],
+  'chef david': ['chef david', 'david teyf', 'teyf'], 'madison and park': ['madison and park', 'madison & park', 'madison park', 'm&p', 'm & p'] };
+const brandText = t => ' ' + String(t || '').toLowerCase().replace(/[’']s\b/g, '').replace(/[^a-z0-9&]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+function mentionedBrand(text) {
+  const t = brandText(text); let best = null, at = Infinity;
+  state.brands.forEach(b => (BRAND_WORDS[b.name.toLowerCase()] || [b.name.toLowerCase()]).forEach(w => { const i = t.indexOf(brandText(w)); if (i >= 0 && i < at) { at = i; best = b; } }));
+  return best;
+}
 function weekdayDate(wd, next) { const t = new Date(), day = t.getDay(); let d = (wd - day + 7) % 7; if (next) { const toSunday = (7 - day) % 7; if (d === 0 || d <= toSunday) d += 7; } return addDays(today(), d); }
 function parseClause(text) {
   let s = ' ' + text.trim().replace(/[.!?]+$/, '') + ' ';
@@ -92,6 +102,7 @@ function parseClause(text) {
   s = s.replace(/^\s*((also|and|then|plus|oh|ok|okay|so|um|uh|alright|right)[,\s]+)+/i, ' ');
   take(/\s(and\s+)?(please|don'?t forget to|make sure to|can you)\s/i);
   const tag = take(/\s#(\S+)/); if (tag) out.brand = matchBrand(tag[1])?.id || null;
+  if (!out.brand) out.brand = mentionedBrand(text)?.id || null;
   const ph = take(/\s((?:at|on|number)\s+)?(\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})(?=\s)/i); if (ph) out.phone = ph[2].trim();
   const re = (w) => new RegExp(`\\s(remind|ask|tell|have|get)\\s+${w}\\s+(to\\s+)?`, 'i');
   if (take(re(on))) { out.owner = 'other'; if (!/remind/i.test(text)) out.type = 'request'; }
@@ -406,10 +417,10 @@ function doneBlock(list, key) {
 /* ---------- Views ---------- */
 function greeting() { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
 function renderToday() {
-  const now = new Date(), t = today(), all = openFor(), prog = all.filter(doing).sort(byWhen), list = all.filter(it => !doing(it) && dateOf(it) && dateOf(it) <= t);
+  const now = new Date(), t = today(), all = openFor(), prog = all.filter(it => doing(it) && dateOf(it) && dateOf(it) <= t).sort(byWhen), /* undated in-progress lives in All */ list = all.filter(it => !doing(it) && dateOf(it) && dateOf(it) <= t);
   const over = list.filter(it => dateOf(it) < t).sort(byWhen), tod = list.filter(it => dateOf(it) === t).sort(byWhen);
   const doneToday = doneFor().filter(it => it.completed_at && dayOf(it.completed_at) === t);
-  const left = over.length + tod.length + prog.filter(it => !dateOf(it) || dateOf(it) <= t).length, who = '';
+  const left = over.length + tod.length + prog.length, who = '';
   const sub = left ? `${left} left today${who}` : doneToday.length ? 'All done for today' : `Nothing due today${who}`;
   const total = left + doneToday.length, nowISO2 = new Date().toISOString();
   const queue = [...new Set([...tod.filter(it => it.remind_at && it.remind_at >= nowISO2), ...over, ...tod.filter(it => !(it.remind_at && it.remind_at >= nowISO2)), ...prog])], next = queue[0];
@@ -495,7 +506,7 @@ function renderNotes() {
     ${list.length ? `<div class="group lst notes-list">${list.map(noteRow).join('')}</div>` : `<div class="empty-big"><p><b>Nothing here yet.</b><br>Type an idea in the bar below and it lands ${f === 'all' || f === 'none' ? 'here' : `in ${esc(brand(f)?.name || 'this folder')}`}.</p></div>`}`;
 }
 async function newNote(body = '', open = false) {
-  const f = state.noteFolder, n = await api.addNote({ body, brand_id: f !== 'all' && f !== 'none' ? f : null }); if (!n) return;
+  const f = state.noteFolder, n = await api.addNote({ body, brand_id: f !== 'all' && f !== 'none' ? f : f === 'all' ? mentionedBrand(body)?.id || null : null }); if (!n) return;
   state.flash = n.id; renderView();
   if (open) openNote(n.id); else toast('Note saved', 'Open', () => openNote(n.id));
 }
@@ -653,7 +664,7 @@ function quickParse(text) {
 function qaPreview() {
   const el = $('#qa-input'); if (!el) return;
   const v = el.value.trim(), btn = $('#qa-btn'); if (!v) state.prevChips = new Set();
-  $('#qa-chips').innerHTML = state.view === 'notes' ? '' : v ? chipsFor(quickParse(el.value)) : (document.activeElement === el ? `<span class="qa-hint">Type it the way you'd say it: call David at 3, or send the menu Friday #LOX</span>` : '');
+  $('#qa-chips').innerHTML = state.view === 'notes' ? '' : v ? chipsFor(quickParse(el.value)) : (document.activeElement === el ? `<span class="qa-hint">Type it the way you'd say it: call David at 3, or send the LOX menu Friday</span>` : '');
   const want = v ? 'add' : 'plus';
   if (btn.dataset.mode !== want) { btn.dataset.mode = want; btn.innerHTML = v ? '<span>Add</span>' : ICON.plus; btn.setAttribute('aria-label', v ? 'Add' : state.view === 'notes' ? 'New note' : 'New reminder with details'); btn.classList.toggle('wide', !!v); }
 }
