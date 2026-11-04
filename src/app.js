@@ -8,7 +8,7 @@ const TYPES = [['task', 'To-do'], ['call', 'Call'], ['request', 'Request'], ['re
 const STAGES = [['idea','Idea'],['script','Script'],['shoot','Shoot'],['edit','Edit'],['review','Review'],['ready','Ready'],['posted','Posted']];
 const PALETTE = [['Navy','#2B4C7E'],['Plum','#7A4A6B'],['Teal','#0F5C63'],['Forest','#2F5D3A'],['Brass','#7D6230'],['Cocoa','#6B4A2F'],['Violet','#5B4B8A'],['Slate','#4A545E']];
 const state = {
-  me: null, profiles: [], brands: [], items: [], activity: [], notes: [], noteFolder: 'all', notesMissing: false,
+  me: null, profiles: [], brands: [], items: [], activity: [], notes: [], noteFolder: 'all', notesMissing: false, routine: [], routineDays: [], routineMissing: false, dailyEdit: false,
   view: 'today', who: 'me', showDone: {}, calOpen: false, calMonth: null, calDay: null, actScope: 'mine', search: '',
   sheet: null, authMode: 'signin', flash: null, counts: {}, segPos: {}, prevChips: new Set(), introPlayed: false, calToken: null
 };
@@ -189,6 +189,11 @@ function seedDemo() {
     act({ item_id: 'r1', actor_id: 'mk', to_id: 'me', kind: 'comment', body: 'Option B feels warmer to me, but your call.', created_at: ago(0.2) }),
     act({ item_id: 'c1', actor_id: 'me', to_id: 'mk', kind: 'comment', body: 'They said samples ship Monday.', created_at: ago(5), read: true }),
     act({ item_id: 'c2', actor_id: 'mk', to_id: 'me', kind: 'call_log', body: 'Left a voicemail. Trying again before lunch.', created_at: ago(20), read: true })];
+  const rs = (owner, title, sort) => ({ id: uid(), owner_id: owner, title, sort, only_on: null, created_at: ago(200) });
+  state.routine = [rs('me', "Check David's emails", 0), rs('me', 'Check the main inbox', 1), rs('me', 'Review Today in coconotes', 2), rs('me', 'Reply to catering inquiries', 3), rs('me', 'Check in with Masha', 4), rs('me', 'Plan tomorrow', 5),
+    rs('mk', 'Check Instagram DMs', 0), rs('mk', 'Review the shot list', 1), rs('mk', "Check David's emails", 2), rs('mk', 'Edit for an hour', 3), rs('mk', 'Plan tomorrow', 4)];
+  const mine = state.routine.filter(x => x.owner_id === 'me'), hers = state.routine.filter(x => x.owner_id === 'mk');
+  state.routineDays = [{ id: uid(), step_id: mine[0].id, owner_id: 'me', day: t, state: 'done', at: ago(2) }, ...hers.slice(0, 3).map((x, i) => ({ id: uid(), step_id: x.id, owner_id: 'mk', day: t, state: 'done', at: ago(3 - i) }))];
 }
 
 /* ---------- Data layer ---------- */
@@ -202,6 +207,8 @@ const api = {
     [state.profiles, state.brands, state.items, state.activity] = r.map(x => x.data);
     const nr = await sb.from('notes').select('*').order('updated_at', { ascending: false });
     state.notesMissing = !!nr.error; state.notes = nr.error ? [] : nr.data;
+    const [rsr, rdr] = await Promise.all([sb.from('routine_steps').select('*').order('sort'), sb.from('routine_days').select('*').gte('day', addDays(today(), -1))]);
+    state.routineMissing = !!(rsr.error || rdr.error); state.routine = rsr.error ? [] : rsr.data; state.routineDays = rdr.error ? [] : rdr.data;
     state.me = state.profiles.find(x => x.id === state.me.id) || state.me;
   },
   async addItem(row) {
@@ -227,6 +234,18 @@ const api = {
   },
   async addNote(row) { const n = { id: uid(), body: '', brand_id: null, created_by: state.me.id, created_at: nowISO(), updated_at: nowISO(), ...row }; state.notes.unshift(n); return (await run(sb?.from('notes').insert(n))) ? n : null; },
   async updateNote(id, patch) { const n = noteById(id); if (!n) return; patch.updated_at = nowISO(); Object.assign(n, patch); return run(sb?.from('notes').update(patch).eq('id', id)); },
+  async addStep(row) { const st = { id: uid(), owner_id: state.me.id, title: '', sort: 0, only_on: null, created_at: nowISO(), ...row }; state.routine.push(st); return (await run(sb?.from('routine_steps').insert(st))) ? st : (state.routine = state.routine.filter(x => x !== st), null); },
+  async deleteStep(id) { state.routine = state.routine.filter(x => x.id !== id); state.routineDays = state.routineDays.filter(x => x.step_id !== id); return run(sb?.from('routine_steps').delete().eq('id', id)); },
+  async reorderSteps(ids) {
+    ids.forEach((id, i) => { const st = state.routine.find(x => x.id === id); if (st) st.sort = i; }); if (DEMO) return true;
+    const r = await Promise.all(ids.map((id, i) => sb.from('routine_steps').update({ sort: i }).eq('id', id))); const bad = r.find(x => x.error); if (bad) fail(bad.error); return !bad;
+  },
+  async setStepDay(step_id, st) {
+    const day = today(); state.routineDays = state.routineDays.filter(x => !(x.step_id === step_id && x.day === day));
+    if (!st) return run(sb?.from('routine_days').delete().eq('step_id', step_id).eq('day', day));
+    const row = { id: uid(), step_id, owner_id: state.me.id, day, state: st, at: nowISO() }; state.routineDays.push(row);
+    return run(sb?.from('routine_days').upsert(row, { onConflict: 'step_id,day' }));
+  },
   async deleteNote(id) { state.notes = state.notes.filter(x => x.id !== id); return run(sb?.from('notes').delete().eq('id', id)); },
   async markRead(ids) { if (!ids.length) return; state.activity.forEach(a => { if (ids.includes(a.id)) a.read = true; }); updateBadge(); return run(sb?.from('activity').update({ read: true }).in('id', ids)); },
   async updateProfile(patch) { Object.assign(state.me, patch); const p = person(state.me.id); if (p && p !== state.me) Object.assign(p, patch); return run(sb?.from('profiles').update(patch).eq('id', state.me.id)); },
@@ -269,6 +288,9 @@ const ICON = {
   activity: svg('<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'),
   search: svg('<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
+  daily: svg('<rect x="4.5" y="3.5" width="15" height="17" rx="3"/><path d="M7.8 9.2l1.4 1.4 2.4-2.6M7.8 15.2l1.4 1.4 2.4-2.6M14 9.5h2.2M14 15.5h2.2"/>'),
+  grip: '<svg viewBox="0 0 24 24" aria-hidden="true">' + [7, 12, 17].map(y => `<circle cx="9" cy="${y}" r="1.4" fill="currentColor"/><circle cx="15" cy="${y}" r="1.4" fill="currentColor"/>`).join('') + '</svg>',
+  pen: svg('<path d="M4.5 19.5l1-4 10-10 3 3-10 10z"/><path d="M13.5 7.5l3 3"/>'),
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
   call: svg('<path d="M5 4h3.5l1.8 4.5-2.3 1.4a11 11 0 0 0 6.1 6.1l1.4-2.3L20 15.5V19a1.5 1.5 0 0 1-1.6 1.5A16.5 16.5 0 0 1 3.5 5.6 1.5 1.5 0 0 1 5 4z"/>'),
   task: svg('<circle cx="12" cy="12" r="8"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/>'),
@@ -290,7 +312,7 @@ const ICON = {
   note: svg('<path d="M5 4h10l4 4v12H5z"/><path d="M15 4v4h4M8.5 12h7M8.5 16h5"/>')
 };
 ICON.calendar = ICON.upcoming;
-const VIEWS = [['today', 'Today'], ['upcoming', 'Upcoming'], ['all', 'All'], ['notes', 'Notes']];
+const VIEWS = [['today', 'Today'], ['daily', 'Daily'], ['upcoming', 'Upcoming'], ['all', 'All'], ['notes', 'Notes']];
 
 /* ---------- Helpers for the list ---------- */
 const fromOther = it => false; // duo app: every task belongs to both of you
@@ -434,6 +456,7 @@ function renderToday() {
       <div class="hero-bot"><span class="hero-big"><span class="bignum" data-count="${left}">${left}</span><span class="hero-unit">${left === 0 && doneToday.length ? 'all done' : 'left'}</span></span>
         <span class="hero-end">${next ? `<button class="hero-check" data-toggle="${next.id}" aria-label="Complete: ${esc(next.title)}"><span class="hc-ic">${ICON.check}</span><span class="hc-l">Confirm</span></button>` : ''}</span></div>
     </section>
+    ${dailyPeek()}
     ${section('In progress', prog, { inDoing: true, inToday: true }) + section('Overdue', over, { red: true, action: ['movetoday', `Move ${over.length} to today`] }) + section('Today', tod, { inToday: true }) || `<div class="empty-big">${MARK(56)}<p><b>${doneToday.length ? 'All done for today.' : 'Nothing due today.'}</b><br>Type one in the bar below.</p></div>`}
     ${doneBlock(doneToday, 'today')}`;
 }
@@ -541,6 +564,97 @@ function searchResults() {
   return `${its.length ? `<section class="sec"><h2 class="sec-h"><span>Reminders</span><span class="sec-n">${its.length}</span></h2><div class="group lst">${its.map(it => row(it)).join('')}</div></section>` : ''}
     ${ns.length ? `<section class="sec"><h2 class="sec-h"><span>Notes</span><span class="sec-n">${ns.length}</span></h2><div class="group lst notes-list">${ns.map(noteRow).join('')}</div></section>` : ''}`;
 }
+/* ---------- Daily: each person's routine, checked off fresh every day ---------- */
+const DAILY_SUGGEST = () => ["Check David's emails", 'Check the main inbox', 'Review Today in coconotes', 'Reply to catering inquiries', 'Check Instagram DMs', `Check in with ${otherName()}`, 'Post a story', 'Plan tomorrow'];
+const routineOf = pid => state.routine.filter(x => x.owner_id === pid && !x.only_on).sort((a, b) => a.sort - b.sort || String(a.created_at).localeCompare(String(b.created_at)));
+const stepsFor = (pid, day = today()) => state.routine.filter(x => x.owner_id === pid && (!x.only_on || x.only_on === day)).sort((a, b) => (a.only_on ? 1 : 0) - (b.only_on ? 1 : 0) || a.sort - b.sort || String(a.created_at).localeCompare(String(b.created_at)));
+const stepRow = (id, day = today()) => state.routineDays.find(x => x.step_id === id && x.day === day);
+const stepState = id => stepRow(id)?.state || null;
+const dailyEditing = () => state.dailyEdit || !routineOf(state.me?.id).length;
+function dailyStats(pid) {
+  const steps = stepsFor(pid), active = steps.filter(x => stepState(x.id) !== 'skipped'), done = active.filter(x => stepState(x.id) === 'done');
+  return { steps, active, done, next: active.find(x => stepState(x.id) !== 'done') };
+}
+function dailyPeek() {
+  if (state.routineMissing || !state.me) return ''; const d = dailyStats(state.me.id); if (!d.steps.length || !d.next) return '';
+  return `<button class="daily-peek" data-view="daily" data-k="dpeek"><span class="dp-l"><span class="mono">Daily, ${d.done.length} of ${d.active.length}</span><span class="dp-t">${esc(d.next.title)}</span></span><span class="dp-go">${ICON.right}</span></button>`;
+}
+function renderDaily() {
+  const label = `Daily, ${new Date().toLocaleDateString('en-US', { weekday: 'long' })}`;
+  if (state.routineMissing) return `${pageHead('Your day,<br>in order', '', 'Daily')}<div class="empty-big"><p><b>Daily needs one quick setup step.</b><br>Run upgrade-5.sql in Supabase, then reopen coconotes.</p></div>`;
+  if (dailyEditing()) return renderDailyEditor();
+  const { steps, active, done, next } = dailyStats(state.me.id), left = active.length - done.length, partner = dailyStats(other().id);
+  const rows = steps.map((x, i) => { const r = stepRow(x.id), st = r?.state;
+    return `<div class="dstep${st === 'done' ? ' is-done' : ''}${st === 'skipped' ? ' is-skip' : ''}${x === next ? ' is-next' : ''}${state.flash === x.id ? ' enter' : ''}" data-k="ds-${x.id}">
+      <button class="dcheck" data-rcheck="${x.id}" aria-pressed="${st === 'done'}" aria-label="${st === 'done' ? 'Undo' : 'Done'}: ${esc(x.title)}">${ICON.check}</button>
+      <span class="dnum" aria-hidden="true">${pad(i + 1)}</span>
+      <span class="dtitle"><span class="dt">${esc(x.title)}</span>${st === 'done' ? `<span class="dmeta">Done ${esc(clock(r.at))}</span>` : st === 'skipped' ? '<span class="dmeta">Skipped today</span>' : x.only_on ? '<span class="dmeta">Just for today</span>' : ''}</span>
+      ${st !== 'done' ? `<button class="dskip" data-rskip="${x.id}" aria-label="${st === 'skipped' ? 'Bring back' : 'Skip today'}: ${esc(x.title)}">${st === 'skipped' ? 'Undo' : 'Skip'}</button>` : ''}
+      ${x.only_on ? `<button class="dx" data-rdel="${x.id}" aria-label="Remove: ${esc(x.title)}">${ICON.x}</button>` : ''}
+    </div>`; }).join('');
+  return `${pageHead('Your day,<br>in order', '', label)}
+    <section class="hero has-next" aria-label="${left} steps to go, ${done.length} done">
+      <div class="hero-top"><span class="mono">${esc(greeting())}, ${esc(firstName(state.me))}</span><span class="hero-prog"><span class="sr-only">${done.length} of ${active.length} done</span>${progressDots(done.length, active.length)}</span></div>
+      <div class="dh-next"><span class="hn-label"><span>${next ? `Up next, step ${steps.indexOf(next) + 1}` : 'Your day'}</span>${active.length ? `<span class="hn-pos">${done.length}/${active.length}</span>` : ''}</span><span class="hn-title">${next ? esc(next.title) : 'All done. Nice work.'}</span></div>
+      <div class="hero-bot"><span class="hero-big"><span class="bignum" data-count="${left}">${left}</span><span class="hero-unit">${left ? 'to go' : 'done'}</span></span>
+        ${next ? `<span class="hero-end"><button class="hero-check" data-rcheck="${next.id}" aria-label="Done: ${esc(next.title)}"><span class="hc-ic">${ICON.check}</span></button></span>` : ''}</div>
+    </section>
+    <section class="sec"><h2 class="sec-h"><span class="sec-t">Checklist</span><span class="sec-n">${done.length}/${active.length}</span></h2><div class="dlist">${rows}</div></section>
+    ${partner.steps.length ? `<div class="partner-card" data-k="pcard"><span class="pc-l"><span class="mono">${esc(otherName())}</span><span class="pc-t">${partner.next ? `Next: ${esc(partner.next.title)}` : 'All done today'}</span></span><span class="pc-n"><span class="bignum" data-count="${partner.done.length}">${partner.done.length}</span><small>/${partner.active.length}</small></span></div>` : ''}
+    <button class="dedit" data-redit="1">${ICON.pen}<span>Edit routine</span></button>`;
+}
+function renderDailyEditor() {
+  const steps = routineOf(state.me.id), have = new Set(steps.map(x => x.title.toLowerCase())), first = !steps.length || state.dailyEdit === 'setup';
+  const sugg = DAILY_SUGGEST().filter(x => !have.has(x.toLowerCase()));
+  return `${pageHead(first ? 'Build<br>your day' : 'Edit your<br>routine', steps.length || '', 'Daily')}
+    <p class="dsub">${first ? 'What do you do every day? Tap to add, or type your own in the bar below. Then drag them into the order you do them.' : 'Drag to change the order. Changes apply every day from now on.'}</p>
+    ${sugg.length ? `<div class="dsugg" role="group" aria-label="Suggestions">${sugg.map(x => `<button class="dsg" data-radd="${esc(x)}">${ICON.plus}<span>${esc(x)}</span></button>`).join('')}</div>` : ''}
+    ${steps.length ? `<ol class="dorder" aria-label="Your routine, in order">${steps.map((x, i) => `<li class="dord${state.flash === x.id ? ' enter' : ''}" data-sid="${x.id}" data-k="do-${x.id}">
+        <button class="dhandle" data-rhandle="${x.id}" aria-label="Move ${esc(x.title)}, step ${i + 1} of ${steps.length}. Use the arrow keys.">${ICON.grip}</button>
+        <span class="dnum">${pad(i + 1)}</span><span class="dtitle"><span class="dt">${esc(x.title)}</span></span>
+        <button class="dx" data-rdel="${x.id}" aria-label="Remove ${esc(x.title)}">${ICON.x}</button></li>`).join('')}</ol>
+      <button class="dsave" data-rsave="1">${first ? 'Start my day' : 'Done'}</button>` : '<div class="dempty">Your steps show up here, in order.</div>'}`;
+}
+async function addRoutineStep(title) {
+  const steps = routineOf(state.me.id); if (steps.some(x => x.title.toLowerCase() === title.toLowerCase())) return;
+  if (!state.dailyEdit) state.dailyEdit = 'setup';
+  const st = await api.addStep({ title, sort: steps.length ? Math.max(...steps.map(x => x.sort)) + 1 : 0 }); if (!st) return;
+  state.flash = st.id; renderView();
+}
+async function toggleStep(id, btn) {
+  const was = stepState(id) === 'done';
+  if (!was) { if (navigator.vibrate) navigator.vibrate(8); anim(btn, [{ transform: 'scale(1)' }, { transform: 'scale(.82)' }, { transform: 'scale(1.08)' }, { transform: 'none' }], { duration: 420, easing: SPRING }); }
+  await api.setStepDay(id, was ? null : 'done'); renderView();
+  if (!was) { const d = dailyStats(state.me.id); if (d.active.length && !d.next) toast('Daily checklist done', 'Undo', async () => { await api.setStepDay(id, null); renderView(); }); }
+}
+async function moveStep(id, dir) {
+  const ids = routineOf(state.me.id).map(x => x.id), i = ids.indexOf(id), j = i + dir; if (i < 0 || j < 0 || j >= ids.length) return;
+  [ids[i], ids[j]] = [ids[j], ids[i]]; await api.reorderSteps(ids); renderView(); $(`[data-rhandle="${id}"]`)?.focus();
+}
+function bindDailyDrag() {
+  let d = null;
+  document.addEventListener('pointerdown', e => {
+    const h = e.target.closest('[data-rhandle]'); if (!h) return;
+    const li = h.closest('.dord'), items = [...li.parentElement.children], rects = items.map(x => x.getBoundingClientRect()), idx = items.indexOf(li);
+    const gap = rects.length > 1 ? rects[1].top - rects[0].bottom : 8;
+    d = { li, items, rects, idx, to: idx, y0: e.clientY, step: rects[idx].height + gap }; li.classList.add('dragging'); e.preventDefault();
+    try { h.setPointerCapture(e.pointerId); } catch {}
+  });
+  document.addEventListener('pointermove', e => {
+    if (!d) return; const dy = e.clientY - d.y0, mid = d.rects[d.idx].top + d.rects[d.idx].height / 2 + dy;
+    d.li.style.transform = `translateY(${dy}px) scale(1.02)`;
+    let to = 0; d.rects.forEach((r, i) => { if (i !== d.idx && r.top + r.height / 2 < mid) to++; }); d.to = to;
+    d.items.forEach((x, i) => { if (i === d.idx) return; x.style.transform = i > d.idx && i <= to ? `translateY(${-d.step}px)` : i < d.idx && i >= to ? `translateY(${d.step}px)` : ''; });
+  });
+  const end = async () => {
+    if (!d) return; const { li, items, idx, to } = d; d = null;
+    items.forEach(x => { x.style.transform = ''; }); li.classList.remove('dragging');
+    if (to === idx) return; const ids = items.map(x => x.dataset.sid), [m] = ids.splice(idx, 1); ids.splice(to, 0, m);
+    if (navigator.vibrate) navigator.vibrate(6); await api.reorderSteps(ids); renderView();
+  };
+  document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
+  document.addEventListener('keydown', e => { const h = e.target.closest?.('[data-rhandle]'); if (!h || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return; e.preventDefault(); moveStep(h.dataset.rhandle, e.key === 'ArrowUp' ? -1 : 1); });
+}
 function renderSearch() { return `${pageHead('Search', '', 'Reminders and notes')}<label class="sr-only" for="search-input">Search</label><input id="search-input" class="input" type="search" placeholder="Imperial, tea, David" value="${esc(state.search)}" autocomplete="off"><div id="search-results">${searchResults()}</div>`; }
 
 const keyOf = n => n.nodeType === 1 ? (n.id || n.getAttribute('data-k') || n.getAttribute('data-rowwrap') || n.getAttribute('data-note') || null) : null;
@@ -574,12 +688,12 @@ function morphChildren(a, b) {
 function morphHTML(el, html) { const t = document.createElement('template'); t.innerHTML = html; morphChildren(el, t.content); }
 function renderView(transition) {
   const v = $('#view'); if (!v) return;
-  const html = { today: renderToday, upcoming: renderUpcoming, all: renderAll, notes: renderNotes, search: renderSearch }[state.view]();
+  const html = { today: renderToday, daily: renderDaily, upcoming: renderUpcoming, all: renderAll, notes: renderNotes, search: renderSearch }[state.view]();
   if (transition === 'page' || state.lastView !== state.view || !v.firstChild) v.innerHTML = html; else morphHTML(v, html);
   state.lastView = state.view;
   document.body.classList.toggle('scrolled', window.scrollY > 6);
   document.body.dataset.section = state.view === 'search' ? 'today' : state.view;
-  const qi = $('#qa-input'); if (qi) { const ph = state.view === 'notes' ? 'New note' : 'New reminder'; if (qi.placeholder !== ph) { qi.placeholder = ph; $('label[for=qa-input]').textContent = ph; } }
+  const qi = $('#qa-input'); if (qi) { const ph = state.view === 'notes' ? 'New note' : state.view === 'daily' ? (dailyEditing() ? 'Add a step to your routine' : 'Add a step for today') : 'New reminder'; if (qi.placeholder !== ph) { qi.placeholder = ph; $('label[for=qa-input]').textContent = ph; } }
   $$('[data-view]').forEach(b => { if (!b.closest('#view')) b.setAttribute('aria-current', b.dataset.view === state.view ? 'page' : 'false'); });
   if (state.view === 'today' && !state.introPlayed) { state.introPlayed = true; if (!REDUCED()) { v.classList.add('intro'); setTimeout(() => v.classList.remove('intro'), 1500); } }
   else if (transition === 'page') [...v.children].slice(0, 8).forEach((el, i) => anim(el, [{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }], { duration: 560, delay: i * 55, easing: EASE, fill: 'backwards' }));
@@ -664,7 +778,7 @@ function quickParse(text) {
 function qaPreview() {
   const el = $('#qa-input'); if (!el) return;
   const v = el.value.trim(), btn = $('#qa-btn'); if (!v) state.prevChips = new Set();
-  $('#qa-chips').innerHTML = state.view === 'notes' ? '' : v ? chipsFor(quickParse(el.value)) : (document.activeElement === el ? `<span class="qa-hint">Type it the way you'd say it: call David at 3, or send the LOX menu Friday</span>` : '');
+  $('#qa-chips').innerHTML = state.view === 'notes' ? '' : state.view === 'daily' ? (v ? `<span class="chip">${dailyEditing() ? 'Every day' : 'Just for today'}</span>` : document.activeElement === el ? `<span class="qa-hint">${dailyEditing() ? 'Adds a step to your daily routine.' : 'Adds a step to today only. Edit routine changes every day.'}</span>` : '') : v ? chipsFor(quickParse(el.value)) : (document.activeElement === el ? `<span class="qa-hint">Type it the way you'd say it: call David at 3, or send the LOX menu Friday</span>` : '');
   const want = v ? 'add' : 'plus';
   if (btn.dataset.mode !== want) { btn.dataset.mode = want; btn.innerHTML = v ? '<span>Add</span>' : ICON.plus; btn.setAttribute('aria-label', v ? 'Add' : state.view === 'notes' ? 'New note' : 'New reminder with details'); btn.classList.toggle('wide', !!v); }
 }
@@ -684,6 +798,15 @@ async function submitQuick(e) {
   e.preventDefault();
   const input = $('#qa-input');
   if (state.view === 'notes') { const v = input.value.trim(); input.value = ''; qaPreview(); return newNote(v, !v); }
+  if (state.view === 'daily') {
+    const v = input.value.trim(); if (!v) return input.focus();
+    if (state.routineMissing) { $('#qa-err').textContent = 'Daily needs upgrade-5.sql run in Supabase first.'; return; }
+    input.value = ''; $('#qa-err').textContent = ''; qaPreview();
+    if (dailyEditing()) return addRoutineStep(v);
+    const st = await api.addStep({ title: v, sort: 1000 + stepsFor(state.me.id).length, only_on: today() }); if (!st) return;
+    state.flash = st.id; renderView(); toast('Added for today', 'Undo', async () => { await api.deleteStep(st.id); renderView(); });
+    return;
+  }
   if (!input.value.trim()) return openNew();
   const p = quickParse(input.value);
   if (!p.title) { $('#qa-err').textContent = 'Type what needs doing, then add it.'; return input.focus(); }
@@ -1101,7 +1224,7 @@ async function deleteWithUndo(id) {
   toast('Deleted', 'Undo', async () => { const back = await api.addItem(copy); if (back) { state.flash = back.id; refresh(); } });
 }
 function bind() {
-  bindSwipe(); bindToastSwipe();
+  bindSwipe(); bindToastSwipe(); bindDailyDrag();
   document.addEventListener('scroll', e => { if (e.target?.classList?.contains('hero-deck')) syncHero(); }, true);
   document.addEventListener('click', async e => {
     if (suppressClick) { e.preventDefault(); e.stopPropagation(); return; }
@@ -1121,6 +1244,12 @@ function bind() {
       return;
     }
     if (d.newon) return openNew({ date: d.newon });
+    if (d.rcheck) return toggleStep(d.rcheck, b);
+    if (d.rskip) { await api.setStepDay(d.rskip, stepState(d.rskip) === 'skipped' ? null : 'skipped'); return renderView(); }
+    if (d.rdel) { const st = state.routine.find(x => x.id === d.rdel); if (!st) return; const copy = { ...st }; await api.deleteStep(st.id); renderView(); return toast('Removed', 'Undo', async () => { await api.addStep(copy); renderView(); }); }
+    if (d.radd) return addRoutineStep(d.radd);
+    if (d.redit) { state.dailyEdit = true; window.scrollTo(0, 0); renderView('page'); return qaPreview(); }
+    if (d.rsave) { state.dailyEdit = false; window.scrollTo(0, 0); renderView('page'); return qaPreview(); }
     if ('smart' in d) { state.smart = d.smart || null; window.scrollTo(0, 0); return renderView('page'); }
     if (d.movetoday) return moveOverdueToToday();
     if (d.mstatus) { const id = s.id, ck = $('#ctx-card .check');
@@ -1290,7 +1419,7 @@ async function start(session) {
   if (notifState() === 'granted') enablePush(true);
   let t; const reload = () => { clearTimeout(t); t = setTimeout(() => api.loadAll().then(refresh).catch(console.error), 200); };
   const ch = sb.channel('coconotes-live');
-  ['items', 'profiles', 'brands', 'notes'].forEach(table => ch.on('postgres_changes', { event: '*', schema: 'public', table }, reload));
+  ['items', 'profiles', 'brands', 'notes', ...(state.routineMissing ? [] : ['routine_steps', 'routine_days'])].forEach(table => ch.on('postgres_changes', { event: '*', schema: 'public', table }, reload));
   ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity' }, p => {
     reload(); const a = p.new; if (a?.to_id !== state.me.id || a.actor_id === state.me.id) return;
     setTimeout(() => { const it = itemById(a.item_id); if (!it) return;
